@@ -265,10 +265,11 @@ function cleanupHistory(){
   persist();
 }
 function isDue(m,day){
-  if(m.skip===today)return false;
+  if(m.skip===today && !m.order)return false;
   if(m.force===today)return true;
-  if(!m.days||m.days.indexOf(day)<0)return false;
+  // 未対応オーダーは本日タブ/MAP本日に必ず表示。
   if(m.order && day===todayDay)return true;
+  if(!m.days||m.days.indexOf(day)<0)return false;
   if(m.visited && day===todayDay)return true;
   if(m.cycle==='毎日')return true;
   if(!m.last||!CYCLES[m.cycle])return true;
@@ -389,7 +390,7 @@ function renderMap(){
     // 本日モードは「今日の曜日に設定された全自販機」を表示し、
     // 頻度上の本日対象だけを通常ピン、未実施予定外をスラッシュで薄く表示する。
     t=state.machines.filter(function(m){
-      return (Array.isArray(m.days)&&m.days.indexOf(todayDay)>=0)||m.force===today||m.order;
+      return isDue(m,todayDay)||m.force===today||!!m.order;
     });
   }else{
     // 曜日モードはその曜日に登録された全自販機を表示。
