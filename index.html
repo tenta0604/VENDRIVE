@@ -251,9 +251,10 @@ function renderAll(){renderHeader();renderToday();renderMap();renderMachines(sta
 function openMachine(id,mode){
   var m=state.machines.find(function(x){return x.id===id});if(!m)return;selectedMachine=m;
   $id('machineModalTitle').textContent=m.name;$id('detailLast').textContent=m.last||'未登録';$id('detailSales').textContent=m.sales||'販売データ未登録';if(m.order){$id('detailOrderType').textContent=m.order.type+(m.order.sub?' ＞ '+m.order.sub:'');$id('detailOrderText').textContent=(m.order.detail||'詳細なし')+' ・ '+timeLeft(m.order.createdAt);$id('detailOrder').classList.remove('hidden')}else{$id('detailOrder').classList.add('hidden')};$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mDays').value=(m.days||[]).join(',');$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';$id('machineExtra').classList.add('hidden');$id('detailMore').textContent='詳細表示';
-  if(mode==='order'&&m.order){$id('mMemo').value='【オーダー】 '+m.order.type+(m.order.sub?' ＞ '+m.order.sub:'')+(m.order.detail?' / '+m.order.detail:'')+'\n'+($id('mMemo').value||'') }
+  
   openModal('machineModal');
 }
+/* ORDER DATA IS STORED SEPARATELY FROM MEMO. */
 function saveMachineData(){if(!selectedMachine)return;var m=selectedMachine;m.name=$id('mName').value.trim()||m.name;m.code=$id('mCode').value.trim();m.address=$id('mAddress').value.trim();m.days=$id('mDays').value.split(',').map(function(x){return x.trim()}).filter(Boolean);m.cycle=$id('mCycle').value;m.last=$id('mLast').value||m.last;m.time=$id('mTime').value||'指定なし';m.sales=$id('mSales').value;m.memo=$id('mMemo').value;persist();closeModal('machineModal');renderAll();toast('保存しました')}
 function completeVisit(){if(!selectedMachine)return;selectedMachine.visited=true;selectedMachine.last=today;selectedMachine.force=null;selectedMachine.skip=null;persist();closeModal('machineModal');renderAll();toast('訪問完了')}
 function skipVisit(){if(!selectedMachine)return;selectedMachine.skip=today;selectedMachine.visited=false;persist();closeModal('machineModal');renderAll();toast('本日の訪問をスキップ')}
