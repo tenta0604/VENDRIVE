@@ -50,7 +50,16 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 #detailOrder{background:#f0eef4;border:1px solid #d9cdea;color:#5b3f78}
 #detailOrderType{word-break:break-word}
 </style>
-</head>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3GQ8n9f5vJQJ3Rr4g4mY6k1q1p8X0=" crossorigin=""/>
+<style>
+#map{height:430px;background:#e8e9ea;overflow:hidden;position:relative;z-index:1}
+#map .leaflet-container{height:100%;width:100%;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
+#map .leaflet-control-zoom{display:none}
+.mapTools{position:absolute;right:9px;top:9px;z-index:1000;display:grid;gap:6px}.mapTools button{width:40px;height:40px;border:1px solid #ddd;background:#fff;border-radius:11px;font-weight:900;box-shadow:0 4px 12px #0002}
+.mapAdd{position:absolute;bottom:10px;left:10px;z-index:1000}.maptag{position:absolute;top:10px;left:10px;z-index:1000;background:#fffffff2;border:1px solid #ddd;border-radius:9px;padding:6px 8px;font-size:9px;font-weight:900}
+.vendrive-pin{background:transparent;border:0}.pinDot{width:25px;height:25px;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px #0005;display:grid;place-items:center}.pinDot.normal{background:#2979ff}.pinDot.time{background:#f59e0b}.pinDot.done{background:#9ca3af;opacity:.55}.pinDot.order{background:#7c3aed}.pinDot.urgent{background:#dc2626;animation:pinPulse 1.35s infinite}.pinDot.order:after{content:"!";color:#fff;font-size:12px;font-weight:950}.pinDot.orderSoon{background:#f59e0b}.currentDot{width:16px;height:16px;border-radius:50%;background:#111;border:3px solid #fff;box-shadow:0 0 0 7px #1112}
+@keyframes pinPulse{0%,100%{box-shadow:0 0 0 0 #dc262655}50%{box-shadow:0 0 0 8px #dc262600}}
+</style></head>
 <body>
 <div class="app">
 <header class="header"><div class="brand"><div class="mark">V</div><div><div class="name">VENDRIVE</div><div class="date" id="headerDate"></div></div></div></header>
@@ -71,12 +80,12 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 </section>
 
 <section id="mapPage" class="page hidden">
-<div class="row"><div><div class="ey">MAP</div><div class="title">マップ</div><div class="subtitle">曜日ごとのルートを確認・編集</div></div><button class="pill" id="allRoutes">全ルート</button></div>
+<div class="row"><div><div class="ey">MAP</div><div class="title">マップ</div><div class="subtitle">実際の地図・現在地・自販機位置を管理</div></div><button class="pill" id="allRoutes">全ルート</button></div>
 <div class="days" id="mapDays"></div>
 <div class="map" id="map"><div class="maptag" id="mapTag"></div>
-<div class="route r0" style="left:13%;top:70%;width:280px;transform:rotate(-18deg)"></div><div class="route r1" style="left:43%;top:53%;width:190px;transform:rotate(25deg)"></div>
-<div class="mapTools"><button id="zoomIn">＋</button><button id="zoomOut">−</button><button id="resetMap">⌖</button></div>
+<div class="mapTools"><button id="locateMe" title="現在地">⌖</button><button id="zoomIn">＋</button><button id="zoomOut">−</button></div>
 <button class="primary mapAdd" id="mapAdd">＋ 自販機追加</button></div>
+<div class="notice" id="mapStatus">地図を読み込んでいます…</div>
 <div class="section"><div class="sectionhead"><b>表示中の自販機</b><span class="muted" id="mapCount"></span></div><div id="mapList"></div></div>
 </section>
 
@@ -156,6 +165,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 </div></div>
 <div class="toast" id="toast"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 (function(){
 "use strict";
@@ -164,7 +174,7 @@ var now=new Date(), today=iso(now), todayDay=WEEK[now.getDay()];
 var CYCLES={'毎日':1,'2日周期':2,'3日周期':3,'1週間に1回':7,'2週間に1回':14,'3週間に1回':21,'1ヶ月に1回':30};
 var key='vendrive_v7_data';
 var state={machines:[],history:[],tomorrowPlan:null};
-var selectedMachine=null, selectedMapDay=todayDay, allRoutes=false, selectedOrderMachine=null, selectedOrderType=null, selectedProductSub=null, mapScale=1, addPoint=null;
+var selectedMachine=null, selectedMapDay=todayDay, allRoutes=false, selectedOrderMachine=null, selectedOrderType=null, selectedProductSub=null, addPoint=null, leafletMap=null, machineLayer=null, routeLayer=null, currentLocationLayer=null, addingMachine=false, geoTimer=null;
 
 function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function diff(a,b){return Math.floor((new Date(a+'T00:00:00')-new Date(b+'T00:00:00'))/86400000)}
@@ -174,6 +184,7 @@ function $id(x){return document.getElementById(x)}
 function openModal(id){$id(id).classList.add('open')}
 function closeModal(id){$id(id).classList.remove('open')}
 function persist(){try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}}
+function migrateCoordinates(){state.machines.forEach(function(m){if(typeof m.lat==='number'&&typeof m.lng==='number'&&m.lat>=0&&m.lat<=100&&m.lng>=0&&m.lng<=100){m.lat=35.285+(m.lat/100)*0.06;m.lng=136.76+(m.lng/100)*0.09}});persist()}
 function load(){
   try{var raw=localStorage.getItem(key);if(raw){var x=JSON.parse(raw);if(x&&Array.isArray(x.machines)){state=x}}}catch(e){}
   if(!state.machines.length){
@@ -190,6 +201,7 @@ function load(){
   // New calendar day: reset only visit UI state. Orders remain.
   var dayKey='vendrive_last_day';
   try{var last=localStorage.getItem(dayKey);if(last!==today){state.machines.forEach(function(m){m.visited=false;m.skip=null;m.force=null});localStorage.setItem(dayKey,today);persist()}}catch(e){}
+  migrateCoordinates();
   cleanupHistory();
 }
 function cleanupHistory(){
@@ -231,12 +243,33 @@ function renderToday(){
   var box=$id('todayList');box.innerHTML='';t.forEach(function(m){box.appendChild(card(m,'today'))});
   if(!t.length)box.innerHTML='<div class="card" style="padding:14px;margin-top:7px;color:#777;font-size:11px">本日の訪問予定はありません。</div>';
 }
+function markerClass(m){if(m.order){var left=86400000-(Date.now()-m.order.createdAt);return left<=0?'urgent':left<=6*3600000?'urgent':'order'}return m.visited?'done':m.time!=='指定なし'?'time':'normal'}
+function ensureMap(){
+  if(leafletMap||typeof L==='undefined')return;
+  leafletMap=L.map('map',{zoomControl:false,attributionControl:true,tap:true}).setView([35.30,136.80],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(leafletMap);
+  machineLayer=L.layerGroup().addTo(leafletMap);routeLayer=L.layerGroup().addTo(leafletMap);currentLocationLayer=L.layerGroup().addTo(leafletMap);
+  leafletMap.on('click',function(e){if(addingMachine){addingMachine=false;$id('map').classList.remove('adding');addMachineAt(e.latlng.lat,e.latlng.lng)}});
+  var press=null;leafletMap.getContainer().addEventListener('touchstart',function(e){if(e.touches.length!==1)return;press=setTimeout(function(){if(!addingMachine){addingMachine=true;$id('map').classList.add('adding');toast('登録位置を選択してください')}} ,650)},{passive:true});
+  ['touchend','touchcancel','touchmove'].forEach(function(ev){leafletMap.getContainer().addEventListener(ev,function(){if(press){clearTimeout(press);press=null}},{passive:true})});
+  $id('mapStatus').textContent='地図を利用できます。＋自販機追加 またはマップ長押しで登録';
+}
 function renderMap(){
+  ensureMap();if(!leafletMap)return;
   $id('mapTag').textContent=allRoutes?'MAP · 全ルート':'MAP · '+selectedMapDay+'曜';
-  var t=targets(selectedMapDay,allRoutes);$id('mapCount').textContent=t.length+'台';var map=$id('map');
-  map.querySelectorAll('.pin').forEach(function(e){e.remove()});
-  t.forEach(function(m,i){var p=document.createElement('button');p.className='pin '+(m.order?'orderPin '+(timeLeft(m.order.createdAt).indexOf('期限超過')===0?'orderUrgent':'orderNormal'):(m.visited?'donePin':m.time!=='指定なし'?'timePin':'normalPin'));p.style.left=(m.lat||50)+'%';p.style.top=(m.lng||50)+'%';p.innerHTML='<span></span>';p.title=m.name;p.onclick=function(e){e.stopPropagation();openMachine(m.id,m.order?'order':'normal')};map.appendChild(p)});
+  machineLayer.clearLayers();routeLayer.clearLayers();
+  var t=targets(selectedMapDay,allRoutes);$id('mapCount').textContent=t.length+'台';
+  var bounds=[];
+  t.forEach(function(m){
+    if(typeof m.lat!=='number'||typeof m.lng!=='number')return;
+    var cls=markerClass(m);var icon=L.divIcon({className:'vendrive-pin',html:'<div class="pinDot '+cls+'"></div>',iconSize:[25,25],iconAnchor:[12.5,12.5]});
+    var mk=L.marker([m.lat,m.lng],{icon:icon,title:m.name});mk.on('click',function(){openMachine(m.id,m.order?'order':'normal')});mk.addTo(machineLayer);bounds.push([m.lat,m.lng]);
+  });
+  if(bounds.length&&!allRoutes){leafletMap.fitBounds(bounds,{padding:[35,35],maxZoom:16});}
+  var ordered=t.filter(function(m){return typeof m.lat==='number'&&typeof m.lng==='number'});
+  if(ordered.length>1){L.polyline(ordered.map(function(m){return [m.lat,m.lng]}),{color:'#555',weight:4,opacity:.55,dashArray:'7 7'}).addTo(routeLayer)}
   var box=$id('mapList');box.innerHTML='';t.forEach(function(m){box.appendChild(card(m,'map'))});
+  if(!t.length)box.innerHTML='<div class="card" style="padding:14px;margin-top:7px;color:#777;font-size:11px">このルートの表示対象はありません。</div>';
 }
 function renderMachines(list){
   var box=$id('machineList');box.innerHTML='';list.forEach(function(m){box.appendChild(card(m,'machines'))});
@@ -288,32 +321,35 @@ function finishDay(){
   if(!confirm('本日の業務を終了しますか？'))return;
   toast('本日の業務を終了しました');setTimeout(function(){if(confirm('明日の予定を確認しますか？'))openTomorrow()},220)
 }
-function addMachineAt(lat,lng){
-  addPoint={lat:lat,lng:lng};$id('newGps').value=lat.toFixed(5)+', '+lng.toFixed(5);$id('newName').value='';$id('newCode').value='';$id('newAddress').value='';openModal('addMachineModal')
-}
+function addMachineAt(lat,lng){addPoint={lat:lat,lng:lng};$id('newGps').value=lat.toFixed(6)+', '+lng.toFixed(6);$id('newAddress').value='住所を取得中…';openModal('addMachineModal');reverseGeocode(lat,lng)}
+function reverseGeocode(lat,lng){
+  $id('newAddress').value='住所を取得中…';
+  clearTimeout(geoTimer);geoTimer=setTimeout(function(){fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+encodeURIComponent(lat)+'&lon='+encodeURIComponent(lng)+'&zoom=18&addressdetails=1&accept-language=ja').then(function(r){if(!r.ok)throw new Error('geocode '+r.status);return r.json()}).then(function(d){$id('newAddress').value=d.display_name||''}).catch(function(){$id('newAddress').value='住所を取得できませんでした。手動入力してください。'})},1100)}
 function saveNewMachine(){
   var id=($id('newCode').value.trim()||'M-'+Date.now().toString().slice(-6));if(state.machines.some(function(m){return m.code===id||m.id===id})){toast('管理番号が重複しています');return}
-  state.machines.push({id:id,name:$id('newName').value.trim()||'新規自販機',code:id,address:$id('newAddress').value.trim(),days:[todayDay],cycle:'1週間に1回',last:today,time:'指定なし',sales:'',memo:'',lat:addPoint?addPoint.lat:50,lng:addPoint?addPoint.lng:50});persist();closeModal('addMachineModal');renderAll();toast('自販機を登録しました')
+  if(!addPoint){toast('マップ上の位置を指定してください');return}
+  state.machines.push({id:id,name:$id('newName').value.trim()||'新規自販機',code:id,address:$id('newAddress').value.trim(),days:[todayDay],cycle:'1週間に1回',last:today,time:'指定なし',sales:'',memo:'',lat:addPoint.lat,lng:addPoint.lng});persist();closeModal('addMachineModal');renderAll();toast('自販機を登録しました');addPoint=null
 }
 function initDays(){
   var b=$id('mapDays');b.innerHTML=['月','火','水','木','金','土','日'].map(function(x){return'<button class="day '+(x===selectedMapDay?'active':'')+'" data-day="'+x+'">'+x+'曜</button>'}).join('');
   b.querySelectorAll('.day').forEach(function(e){e.onclick=function(){selectedMapDay=e.dataset.day;allRoutes=false;$id('allRoutes').textContent='全ルート';initDays();renderMap()}})
 }
 function bind(){
-  document.querySelectorAll('.tabs button').forEach(function(b){b.onclick=function(){document.querySelectorAll('.tabs button').forEach(function(x){x.classList.remove('active')});b.classList.add('active');document.querySelectorAll('.page').forEach(function(p){p.classList.add('hidden')});$id(b.dataset.page).classList.remove('hidden')}})
+  document.querySelectorAll('.tabs button').forEach(function(b){b.onclick=function(){document.querySelectorAll('.tabs button').forEach(function(x){x.classList.remove('active')});b.classList.add('active');document.querySelectorAll('.page').forEach(function(p){p.classList.add('hidden')});$id(b.dataset.page).classList.remove('hidden');if(b.dataset.page==='mapPage'){ensureMap();setTimeout(function(){if(leafletMap){leafletMap.invalidateSize();renderMap()}},50)}}})
   $id('allRoutes').onclick=function(){allRoutes=!allRoutes;$id('allRoutes').textContent=allRoutes?'曜日ルート':'全ルート';renderMap()}
   $id('finishDay').onclick=finishDay
   $id('closeTomorrow').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowLater').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowSave').onclick=function(){persist();closeModal('tomorrowModal');toast('明日の予定を保存しました')}
-  $id('closeMachine').onclick=function(){closeModal('machineModal')};$id('detailMore').onclick=function(){var e=$id('machineExtra');e.classList.toggle('hidden');this.textContent=e.classList.contains('hidden')?'詳細表示':'詳細を閉じる'};$id('saveMachine').onclick=saveMachineData;$id('completeMachine').onclick=completeVisit;$id('skipMachine').onclick=skipVisit;$id('forceMachine').onclick=forceVisit;$id('machineRoute').onclick=function(){if(selectedMachine)location.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(selectedMachine.address||selectedMachine.name)}
+  $id('closeMachine').onclick=function(){closeModal('machineModal')};$id('detailMore').onclick=function(){var e=$id('machineExtra');e.classList.toggle('hidden');this.textContent=e.classList.contains('hidden')?'詳細表示':'詳細を閉じる'};$id('saveMachine').onclick=saveMachineData;$id('completeMachine').onclick=completeVisit;$id('skipMachine').onclick=skipVisit;$id('forceMachine').onclick=forceVisit;$id('machineRoute').onclick=function(){if(selectedMachine)location.href='https://www.google.com/maps/dir/?api=1&destination='+(typeof selectedMachine.lat==='number'&&typeof selectedMachine.lng==='number'?selectedMachine.lat+','+selectedMachine.lng:encodeURIComponent(selectedMachine.address||selectedMachine.name))}
   $id('addOrder').onclick=openOrder;$id('closeOrder').onclick=function(){closeModal('orderModal')};$id('cancelOrder').onclick=function(){closeModal('orderModal')};$id('orderMachineSearch').oninput=orderSearch;$id('saveOrder').onclick=saveOrder
   document.querySelectorAll('.orderType').forEach(function(b){b.onclick=function(){document.querySelectorAll('.orderType').forEach(function(x){x.classList.remove('active')});b.classList.add('active');selectedOrderType=b.dataset.type;selectedProductSub=null;$id('productSub').classList.toggle('hidden',selectedOrderType!=='商品関連');document.querySelectorAll('.subtype').forEach(function(x){x.classList.remove('active')})}})
   document.querySelectorAll('.subtype').forEach(function(b){b.onclick=function(){document.querySelectorAll('.subtype').forEach(function(x){x.classList.remove('active')});b.classList.add('active');selectedProductSub=b.dataset.sub}})
   $id('machineSearch').oninput=function(){var q=this.value.trim().toLowerCase();var list=state.machines.filter(function(m){return !q||[m.name,m.address,m.code,m.id].join(' ').toLowerCase().indexOf(q)>=0});var r=$id('machineResults');r.innerHTML='';list.slice(0,12).forEach(function(m){var e=document.createElement('div');e.className='result';e.innerHTML='<b>'+esc(m.name)+'</b><small>'+esc(m.address||'住所未登録')+' ・ '+esc(m.code||m.id)+'</small>';e.onclick=function(){openMachine(m.id)};r.appendChild(e)});r.classList.toggle('hidden',!q||!list.length);if(!q)renderMachines(state.machines)}
   $id('addMachine').onclick=function(){addPoint=null;$id('newGps').value='未指定（後からマップで設定）';openModal('addMachineModal')}
-  $id('mapAdd').onclick=function(){toast('マップ上の登録位置をタップしてください');$id('map').classList.add('adding')}
-  $id('map').onclick=function(e){var m=$id('map');if(!m.classList.contains('adding')||e.target.closest('.mapTools')||e.target.closest('.mapAdd')||e.target.closest('.pin'))return;var r=m.getBoundingClientRect(),lat=((e.clientX-r.left)/r.width)*100,lng=((e.clientY-r.top)/r.height)*100;m.classList.remove('adding');addMachineAt(lat,lng)}
-  $id('closeAdd').onclick=function(){closeModal('addMachineModal')};$id('cancelAdd').onclick=function(){closeModal('addMachineModal')};$id('saveAdd').onclick=saveNewMachine
-  $id('zoomIn').onclick=function(){mapScale=Math.min(1.25,mapScale+.1);$id('map').style.transform='scale('+mapScale+')';$id('map').style.transformOrigin='center'};$id('zoomOut').onclick=function(){mapScale=Math.max(.85,mapScale-.1);$id('map').style.transform='scale('+mapScale+')'};$id('resetMap').onclick=function(){mapScale=1;$id('map').style.transform='scale(1)'}
+  ensureMap();
+  $id('mapAdd').onclick=function(e){e.stopPropagation();addingMachine=true;$id('map').classList.add('adding');toast('登録位置をタップしてください')}
+  $id('locateMe').onclick=function(){if(!navigator.geolocation){toast('この端末では現在地取得に対応していません');return}toast('現在地を取得しています…');navigator.geolocation.getCurrentPosition(function(pos){var lat=pos.coords.latitude,lng=pos.coords.longitude;currentLocationLayer.clearLayers();L.circleMarker([lat,lng],{radius:8,color:'#fff',weight:3,fillColor:'#111',fillOpacity:1}).addTo(currentLocationLayer);leafletMap.setView([lat,lng],16);toast('現在地を表示しました')},function(){toast('現在地を取得できませんでした')},{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}
+  $id('closeAdd').onclick=function(){closeModal('addMachineModal');addPoint=null};$id('cancelAdd').onclick=function(){closeModal('addMachineModal');addPoint=null};$id('saveAdd').onclick=saveNewMachine
+  $id('zoomIn').onclick=function(){leafletMap.zoomIn()};$id('zoomOut').onclick=function(){leafletMap.zoomOut()}
 }
 load();initDays();bind();renderAll();
 })();
