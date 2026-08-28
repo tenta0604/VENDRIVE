@@ -98,12 +98,13 @@ html,body{overscroll-behavior-y:none}body{-webkit-user-select:none;user-select:n
 </section>
 
 <section id="mapPage" class="page hidden">
-<div class="row"><div><div class="ey">MAP</div><div class="title">マップ</div><div class="subtitle">実際の地図・現在地・自販機位置を管理</div></div><button class="pill" id="allRoutes">全ルート</button></div>
+<div class="row"><div><div class="ey">MAP</div><div class="title">マップ</div><div class="subtitle">実際の地図・現在地・自販機位置を管理</div></div>
+<div style="display:flex;gap:6px;align-items:center"><button class="secondary pill" id="officeAddTop">＋営業所</button><button class="pill" id="allRoutes">全ルート</button></div></div>
 <div class="days" id="mapDays"></div><div class="search"><span class="searchIcon">⌕</span><input id="addressSearch" placeholder="住所から場所を検索"></div><div id="addressResults" class="results hidden"></div>
 <div class="map" id="map"><div class="maptag" id="mapTag"></div>
 <div class="mapTools"><button id="locateMe" title="現在地">⌖</button><button id="zoomIn">＋</button><button id="zoomOut">−</button></div>
-<button class="primary mapAdd" id="mapAdd">＋ 自販機追加</button><button class="secondary" id="officeAdd" style="position:absolute;bottom:10px;left:145px;z-index:6">＋ 営業所設定</button></div>
-<div class="notice" id="mapStatus">地図を読み込んでいます…</div>
+<button class="primary mapAdd" id="mapAdd">＋ 自販機追加</button><button class="secondary" id="officeAdd" style="position:absolute;bottom:10px;left:155px;z-index:6;font-size:10px;padding:10px 12px">＋ 営業所設定</button></div>
+<div class="notice" id="mapStatus">地図を読み込んでいます…</div><div class="section"><div class="sectionhead"><b>営業所</b><button class="secondary" id="officeAddList">＋追加</button></div><div id="officeList"></div></div>
 <div class="section"><div class="sectionhead"><b>表示中の自販機</b><span class="muted" id="mapCount"></span></div><div id="mapList"></div></div>
 </section>
 
@@ -323,7 +324,7 @@ function ensureMap(){
   machineLayer=L.layerGroup().addTo(leafletMap);routeLayer=L.layerGroup().addTo(leafletMap);currentLocationLayer=L.layerGroup().addTo(leafletMap);setTimeout(function(){leafletMap.invalidateSize({pan:false})},100);
   leafletMap.on('click',function(e){
  if(addingMachine){addingMachine=false;$id('map').classList.remove('adding');addMachineAt(e.latlng.lat,e.latlng.lng);return}
- if(addingOffice){addingOffice=false;officePoint={lat:e.latlng.lat,lng:e.latlng.lng};$id('officeGps').value=e.latlng.lat.toFixed(6)+', '+e.latlng.lng.toFixed(6);openModal('officeModal')}
+ if(addingOffice){addingOffice=false;$id('map').classList.remove('adding');officePoint={lat:e.latlng.lat,lng:e.latlng.lng};$id('officeGps').value=e.latlng.lat.toFixed(6)+', '+e.latlng.lng.toFixed(6);openModal('officeModal')}
 });leafletMap.getContainer().addEventListener('contextmenu',function(e){e.preventDefault()});
   var press=null;leafletMap.getContainer().addEventListener('touchstart',function(e){if(e.touches.length!==1)return;press=setTimeout(function(){if(!addingMachine&&!addingOffice){addingMachine=true;$id('map').classList.add('adding');toast('登録位置をタップしてください')}} ,650)},{passive:true});
   ['touchend','touchcancel','touchmove'].forEach(function(ev){leafletMap.getContainer().addEventListener(ev,function(){if(press){clearTimeout(press);press=null}},{passive:true})});
@@ -345,12 +346,23 @@ function saveOffice(){
  state.offices.push({id:'office-'+Date.now(),name:name,address:($id('officeAddress').value||'').trim(),lat:officePoint.lat,lng:officePoint.lng});
  persist();officePoint=null;closeModal('officeModal');renderAll();if(leafletMap)setTimeout(function(){leafletMap.invalidateSize({pan:false});renderMap()},50);toast('営業所を登録しました')
 }
+function renderOffices(){
+ var box=$id('officeList');if(!box)return;box.innerHTML='';
+ var offices=state.offices||[];
+ if(!offices.length){box.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">営業所はまだ登録されていません。</div>';return}
+ offices.forEach(function(o){
+   var e=document.createElement('div');e.className='item';
+   e.innerHTML='<div><b>⌂ '+esc(o.name||'営業所')+'</b><div class="meta">'+esc(o.address||'住所未登録')+'</div></div><button class="badge b-gray">ナビ</button>';
+   e.querySelector('button').onclick=function(ev){ev.stopPropagation();navigateToMachine(o)};
+   box.appendChild(e);
+ });
+}
 function renderMap(){
   ensureMap();if(!leafletMap)return;
   var day=selectedMapDay;
   $id('mapTag').textContent=allRoutes?'MAP · 全ルート':'MAP · '+day+'曜';
   machineLayer.clearLayers();routeLayer.clearLayers();
-  var t=targets(day,allRoutes);
+  var t=allRoutes?state.machines.slice():state.machines.filter(function(m){return Array.isArray(m.days)&&m.days.indexOf(day)>=0});
   $id('mapCount').textContent=t.length+'台';
   var bounds=[];
   t.forEach(function(m){
@@ -392,10 +404,10 @@ function renderOrders(){
   if(!pending.length)box.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">対応待ちのオーダーはありません。</div>';
   var hbox=$id('historyList');hbox.innerHTML='';(state.history||[]).slice().sort(function(a,b){return b.completedAt-a.completedAt}).forEach(function(h){var e=document.createElement('div');e.className='history';e.innerHTML='<b>'+esc(h.machineName)+'</b><div class="meta">'+esc(h.type)+(h.sub?' ＞ '+esc(h.sub):'')+(h.detail?' ・ '+esc(h.detail):'')+'<br>'+new Date(h.completedAt).toLocaleString('ja-JP')+'</div>';hbox.appendChild(e)});if(!hbox.children.length)hbox.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">過去30日間の対応履歴はありません。</div>';
 }
-function renderAll(){renderHeader();renderTodayWithTasks();renderMachines(state.machines);renderOrders();renderTasks();renderMakers();refreshMakerOptions();if(!document.getElementById('mapPage').classList.contains('hidden'))renderMap()}
+function renderAll(){renderHeader();renderTodayWithTasks();renderMachines(state.machines);renderOrders();renderTasks();renderMakers();refreshMakerOptions();renderOffices();if(!document.getElementById('mapPage').classList.contains('hidden'))renderMap()}
 function openMachine(id,mode){
   var m=state.machines.find(function(x){return x.id===id});if(!m)return;selectedMachine=m;
-  $id('machineModalTitle').textContent=m.name;$id('detailMaker').textContent=m.maker||'メーカー未設定';document.querySelectorAll('#mDaysPicker button').forEach(function(b){b.classList.toggle('active',(m.days||[]).indexOf(b.dataset.day)>=0)});var activeTasks=(state.tasks||[]).filter(function(t){return !t.completed&&(t.target==='all'||makerGroup(m.maker)===t.target)});if(activeTasks.length){$id('detailTaskText').textContent=activeTasks[0].text+(activeTasks.length>1?' ほか'+(activeTasks.length-1)+'件':'');$id('detailTaskMaker').textContent=activeTasks[0].target==='all'?'全メーカー':'対象：'+activeTasks[0].target;$id('detailTask').classList.remove('hidden')}else{$id('detailTask').classList.add('hidden')}applyMakerSelect('mMaker','mMakerCustom',m.maker||'');$id('detailLast').textContent=m.last||'未登録';$id('detailSales').textContent=m.sales||'販売データ未登録';if(m.order){$id('detailOrderType').textContent=m.order.type+(m.order.sub?' ＞ '+m.order.sub:'');$id('detailOrderText').textContent=(m.order.detail||'詳細なし')+' ・ '+timeLeft(m.order.createdAt);$id('detailOrder').classList.remove('hidden')}else{$id('detailOrder').classList.add('hidden')};$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mDays').value=(m.days||[]).join(',');$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';$id('machineExtra').classList.add('hidden');$id('detailMore').textContent='詳細表示';
+  $id('machineModalTitle').textContent=m.name;$id('detailMaker').textContent=m.maker||'メーカー未設定';document.querySelectorAll('#mDaysPicker button').forEach(function(b){b.classList.toggle('active',(m.days||[]).indexOf(b.dataset.day)>=0)});var activeTasks=(state.tasks||[]).filter(function(t){return !t.completed&&(t.target==='all'||makerGroup(m.maker)===t.target)});if(activeTasks.length){$id('detailTaskText').textContent=activeTasks[0].text+(activeTasks.length>1?' ほか'+(activeTasks.length-1)+'件':'');$id('detailTaskMaker').textContent=activeTasks[0].target==='all'?'全メーカー':'対象：'+activeTasks[0].target;$id('detailTask').classList.remove('hidden')}else{$id('detailTask').classList.add('hidden')}applyMakerSelect('mMaker','mMakerCustom',m.maker||'');$id('detailLast').textContent=m.last||'未登録';$id('detailSales').textContent=m.sales||'販売データ未登録';if(m.order){$id('detailOrderType').textContent=m.order.type+(m.order.sub?' ＞ '+m.order.sub:'');$id('detailOrderText').textContent=(m.order.detail||'詳細なし')+' ・ '+timeLeft(m.order.createdAt);$id('detailOrder').classList.remove('hidden')}else{$id('detailOrder').classList.add('hidden')};$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';$id('machineExtra').classList.add('hidden');$id('detailMore').textContent='詳細表示';
   
   openModal('machineModal');
 }
@@ -534,8 +546,20 @@ function initDays(){
   })
 }
 function bind(){
-  $id('officeAdd').onclick=function(){officePoint=null;$id('officeName').value='';$id('officeAddress').value='';$id('officeGps').value='MAPで位置指定';addingOffice=true;toast('MAPをタップして営業所位置を指定')};
-  $id('closeOffice').onclick=function(){closeModal('officeModal');officePoint=null;addingOffice=false};
+  $id('officeAddList').onclick=startOfficeAdd;
+  function startOfficeAdd(){
+ officePoint=null;
+ $id('officeName').value='';
+ $id('officeAddress').value='';
+ $id('officeGps').value='MAPで位置指定';
+ addingMachine=false;
+ addingOffice=true;
+ $id('map').classList.add('adding');
+ toast('MAPをタップして営業所位置を指定');
+}
+$id('officeAdd').onclick=startOfficeAdd;
+$id('officeAddTop').onclick=function(){startOfficeAdd();};
+  $id('closeOffice').onclick=function(){closeModal('officeModal');officePoint=null;addingOffice=false;$id('map').classList.remove('adding')};
   $id('officePick').onclick=function(){closeModal('officeModal');addingOffice=true;toast('MAPをタップして営業所位置を指定')};
   $id('officeSave').onclick=saveOffice;
   document.querySelectorAll('#mDaysPicker button').forEach(function(b){b.onclick=function(){b.classList.toggle('active')}});
