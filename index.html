@@ -46,6 +46,10 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 .pin.orderNormal{background:#7c3aed}.pin.orderUrgent{background:#dc2626;animation:orderPulse 1.35s infinite}.pin.timePin{background:#f59e0b}.pin.normalPin{background:#2979ff}.pin.donePin{background:#9ca3af;opacity:.5}
 @keyframes orderPulse{0%,100%{box-shadow:0 0 0 0 #dc262655}50%{box-shadow:0 0 0 8px #dc262600}}
 </style>
+<style>
+#detailOrder{background:#f0eef4;border:1px solid #d9cdea;color:#5b3f78}
+#detailOrderType{word-break:break-word}
+</style>
 </head>
 <body>
 <div class="app">
@@ -94,6 +98,12 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 <div class="modal" id="machineModal"><div class="sheet">
 <div class="modalTop"><div><div class="ey">MACHINE</div><div class="title" id="machineModalTitle"></div></div><button class="pill" id="closeMachine">閉じる</button></div>
 <div class="card" style="padding:14px;margin-top:11px">
+<div id="detailOrder" class="notice hidden" style="margin-top:10px">
+  <div style="font-size:9px;letter-spacing:.7px;font-weight:900">ORDER</div>
+  <div id="detailOrderType" style="font-size:13px;font-weight:900;margin-top:2px"></div>
+  <div id="detailOrderText" style="font-size:10px;margin-top:3px;line-height:1.45"></div>
+</div>
+
   <div class="muted">前回訪問日</div><b id="detailLast" style="font-size:14px"></b>
   <div class="muted" style="margin-top:10px">販売データ</div><div id="detailSales" style="font-size:11px;margin-top:3px;line-height:1.5"></div>
 </div>
@@ -240,7 +250,7 @@ function renderOrders(){
 function renderAll(){renderHeader();renderToday();renderMap();renderMachines(state.machines);renderOrders()}
 function openMachine(id,mode){
   var m=state.machines.find(function(x){return x.id===id});if(!m)return;selectedMachine=m;
-  $id('machineModalTitle').textContent=m.name;$id('detailLast').textContent=m.last||'未登録';$id('detailSales').textContent=m.sales||'販売データ未登録';$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mDays').value=(m.days||[]).join(',');$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';$id('machineExtra').classList.add('hidden');$id('detailMore').textContent='詳細表示';
+  $id('machineModalTitle').textContent=m.name;$id('detailLast').textContent=m.last||'未登録';$id('detailSales').textContent=m.sales||'販売データ未登録';if(m.order){$id('detailOrderType').textContent=m.order.type+(m.order.sub?' ＞ '+m.order.sub:'');$id('detailOrderText').textContent=(m.order.detail||'詳細なし')+' ・ '+timeLeft(m.order.createdAt);$id('detailOrder').classList.remove('hidden')}else{$id('detailOrder').classList.add('hidden')};$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mDays').value=(m.days||[]).join(',');$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';$id('machineExtra').classList.add('hidden');$id('detailMore').textContent='詳細表示';
   if(mode==='order'&&m.order){$id('mMemo').value='【オーダー】 '+m.order.type+(m.order.sub?' ＞ '+m.order.sub:'')+(m.order.detail?' / '+m.order.detail:'')+'\n'+($id('mMemo').value||'') }
   openModal('machineModal');
 }
