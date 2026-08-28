@@ -199,10 +199,16 @@ html,body{overscroll-behavior-y:none}body{-webkit-user-select:none;user-select:n
 <div class="hero" style="margin-top:10px"><div class="ey">TOMORROW</div><div class="heroTitle" id="tomorrowDate"></div><div class="heroSub" id="tomorrowSummary"></div></div>
 <div class="stats"><div class="kpi"><span>訪問予定</span><b id="tomorrowVisits">0</b></div><div class="kpi"><span>時間指定</span><b id="tomorrowTimed">0</b></div><div class="kpi"><span>オーダー</span><b id="tomorrowOrders">0</b></div></div>
 <div class="section"><div class="sectionhead"><b>明日の訪問先</b><span class="muted">除外できます</span></div><div id="tomorrowList"></div></div><div class="section"><div class="sectionhead"><b>未完了タスク</b><span class="muted">明日の対象</span></div><div id="tomorrowTasks"></div></div>
-<div class="actions"><button class="secondary" id="tomorrowMap">明日の予定をMAPで確認</button></div>
+<div class="actions"><button class="secondary" id="tomorrowAdd">＋ 自販機を追加</button><button class="secondary" id="tomorrowMap">明日の予定をMAPで確認</button></div>
 <div class="actions"><button class="secondary" id="tomorrowLater">確認せず終了</button><button class="primary" id="tomorrowSave">予定を保存</button></div>
 </div></div>
 
+<div class="modal" id="tomorrowAddModal"><div class="sheet">
+<div class="modalTop"><div><div class="ey">ADD TO TOMORROW</div><div class="title">明日の予定に追加</div></div><button class="pill" id="closeTomorrowAdd">閉じる</button></div>
+<div class="notice">明日の通常ルートに含まれていない自販機を、臨時で追加できます。</div>
+<div class="formGroup"><label>自販機を検索</label><input id="tomorrowAddSearch" placeholder="自販機名・管理番号・メーカー・住所"></div>
+<div id="tomorrowAddList"></div>
+</div></div>
 <div class="modal" id="addMachineModal"><div class="sheet">
 <div class="modalTop"><div><div class="ey">NEW MACHINE</div><div class="title">自販機を追加</div></div><button class="pill" id="closeAdd">閉じる</button></div>
 <div class="notice">マップ上の位置を指定して登録できます。住所は自動取得後も手動修正できる設計です。</div>
@@ -544,6 +550,36 @@ function eligibleTomorrow(m){
 function tomorrowDefaultIds(){
   return state.machines.filter(eligibleTomorrow).map(function(m){return m.id});
 }
+function renderTomorrowAddList(){
+  var box=$id('tomorrowAddList');if(!box)return;
+  var q=($id('tomorrowAddSearch').value||'').trim().toLowerCase();
+  var d=tomorrowDate(),t=iso(d);
+  var saved=state.tomorrowPlan&&state.tomorrowPlan.date===t&&state.tomorrowPlan.manual===true?state.tomorrowPlan:null;
+  var ids=saved?saved.ids:tomorrowDefaultIds();
+  var arr=state.machines.filter(function(m){
+    if(ids.indexOf(m.id)>=0)return false;
+    var hay=[m.name,m.code,m.maker,m.address].join(' ').toLowerCase();
+    return !q||hay.indexOf(q)>=0;
+  });
+  box.innerHTML='';
+  if(!arr.length){box.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">追加できる自販機がありません。</div>';return}
+  arr.forEach(function(m){
+    var e=document.createElement('div');e.className='item';
+    e.innerHTML='<div><b>'+esc(m.name)+'</b><div class="meta">'+esc(m.maker||'メーカー未設定')+' ・ '+esc(m.address||m.code||'')+'</div></div><button class="pill">追加</button>';
+    e.querySelector('button').onclick=function(){
+      var current=state.tomorrowPlan&&state.tomorrowPlan.date===t&&state.tomorrowPlan.manual===true?state.tomorrowPlan:{date:t,ids:tomorrowDefaultIds(),manual:false};
+      if(current.ids.indexOf(m.id)<0)current.ids.push(m.id);
+      current.manual=true;state.tomorrowPlan=current;persist();
+      closeModal('tomorrowAddModal');openTomorrow();
+    };
+    box.appendChild(e);
+  });
+}
+function openTomorrowAdd(){
+  $id('tomorrowAddSearch').value='';
+  renderTomorrowAddList();
+  openModal('tomorrowAddModal');
+}
 function openTomorrow(){
   var d=tomorrowDate(),t=iso(d),defaultIds=tomorrowDefaultIds();
   // 古いバージョンで保存された「空の予定」は採用せず、必ず明日の条件から再計算する。
@@ -679,7 +715,7 @@ $id('officeAddTop').onclick=function(){startOfficeAdd();};
   document.querySelectorAll('.tabs button').forEach(function(b){b.onclick=function(){document.querySelectorAll('.tabs button').forEach(function(x){x.classList.remove('active')});b.classList.add('active');document.querySelectorAll('.page').forEach(function(p){p.classList.add('hidden')});$id(b.dataset.page).classList.remove('hidden');if(b.dataset.page==='mapPage'){ensureMap();setTimeout(function(){if(leafletMap){leafletMap.invalidateSize();renderMap()}},50)}}})
   $id('allRoutes').onclick=function(){allRoutes=!allRoutes;mapTodayMode=false;mapTomorrowMode=false;$id('allRoutes').textContent=allRoutes?'曜日ルート':'全ルート';initDays();renderMap()}
   $id('finishDay').onclick=finishDay;$id('todayTodo').parentNode.onclick=function(){showTodayStat('todo')};$id('todayVisited').parentNode.onclick=function(){showTodayStat('done')};$id('todayOrders').parentNode.onclick=function(){showTodayStat('order')};$id('closeStats').onclick=function(){closeModal('statsModal')};$id('orderVisitDone').onclick=finishVisitCore;$id('orderVisitKeep').onclick=function(){if(selectedMachine){selectedMachine.visited=true;selectedMachine.last=today;selectedMachine.force=null;selectedMachine.skip=null;persist();closeModal('orderVisitConfirm');renderAll();toast('訪問完了')}}
-  $id('closeTomorrow').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowMap').onclick=function(){
+  $id('closeTomorrow').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowAdd').onclick=openTomorrowAdd;$id('closeTomorrowAdd').onclick=function(){closeModal('tomorrowAddModal')};$id('tomorrowAddSearch').oninput=renderTomorrowAddList;$id('tomorrowMap').onclick=function(){
   closeModal('tomorrowModal');
   // 明日の予定をその場で最新計算。曜日登録台の全表示にはしない。
   var td=tomorrowDate(),tt=iso(td);
