@@ -59,13 +59,13 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 .mapAdd{position:absolute;bottom:10px;left:10px;z-index:1000}.maptag{position:absolute;top:10px;left:10px;z-index:1000;background:#fffffff2;border:1px solid #ddd;border-radius:9px;padding:6px 8px;font-size:9px;font-weight:900}
 .vendrive-pin{background:transparent;border:0}.pinDot{width:25px;height:25px;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px #0005;display:grid;place-items:center}.pinDot.normal{background:#2979ff}.pinDot.time{background:#f59e0b}.pinDot.done{background:#9ca3af;opacity:.55}.pinDot.order{background:#7c3aed}.pinDot.urgent{background:#dc2626;animation:pinPulse 1.35s infinite}.pinDot.order:after{content:"!";color:#fff;font-size:12px;font-weight:950}.pinDot.orderSoon{background:#f59e0b}.currentDot{width:16px;height:16px;border-radius:50%;background:#111;border:3px solid #fff;box-shadow:0 0 0 7px #1112}
 @keyframes pinPulse{0%,100%{box-shadow:0 0 0 0 #dc262655}50%{box-shadow:0 0 0 8px #dc262600}}
-</style></head>
+</style><style>.tabs{grid-template-columns:repeat(5,minmax(0,1fr))}.taskItem{border-left:4px solid #dc2626!important}.taskMeta{font-size:10px;color:#777;margin-top:4px;line-height:1.45}.makerChip{display:inline-block;padding:4px 7px;border-radius:99px;background:#eff0f1;font-size:9px;font-weight:850;margin-top:5px}</style></head>
 <body>
 <div class="app">
 <header class="header"><div class="brand"><div class="mark">V</div><div><div class="name">VENDRIVE</div><div class="date" id="headerDate"></div></div></div></header>
 <nav class="tabs">
 <button class="active" data-page="todayPage">本日</button>
-<button data-page="mapPage">マップ</button>
+<button data-page="tasksPage">タスク</button><button data-page="mapPage">マップ</button>
 <button data-page="machinesPage">自販機</button>
 <button data-page="ordersPage">オーダー</button>
 </nav>
@@ -79,9 +79,15 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 <div class="section"><button class="bigComplete" id="finishDay">本日の業務終了</button></div>
 </section>
 
+<section id="tasksPage" class="page hidden">
+<div class="row"><div><div class="ey">TASKS</div><div class="title">タスク</div><div class="subtitle">完了するまで残り続ける作業</div></div><button class="primary pill" id="addTask">＋登録</button></div>
+<div class="hero" style="margin-top:11px"><div class="ey">UNFINISHED</div><div class="heroTitle"><span id="taskCount">0</span> 件</div><div class="heroSub">完了するまで本日の画面の最上部に表示されます</div></div>
+<div class="section"><div class="sectionhead"><b>未完了タスク</b><span class="muted">メーカー連動</span></div><div id="taskList"></div></div>
+</section>
+
 <section id="mapPage" class="page hidden">
 <div class="row"><div><div class="ey">MAP</div><div class="title">マップ</div><div class="subtitle">実際の地図・現在地・自販機位置を管理</div></div><button class="pill" id="allRoutes">全ルート</button></div>
-<div class="days" id="mapDays"></div>
+<div class="days" id="mapDays"></div><div class="search"><span class="searchIcon">⌕</span><input id="addressSearch" placeholder="住所から場所を検索"></div><div id="addressResults" class="results hidden"></div>
 <div class="map" id="map"><div class="maptag" id="mapTag"></div>
 <div class="mapTools"><button id="locateMe" title="現在地">⌖</button><button id="zoomIn">＋</button><button id="zoomOut">−</button></div>
 <button class="primary mapAdd" id="mapAdd">＋ 自販機追加</button></div>
@@ -92,7 +98,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 <section id="machinesPage" class="page hidden">
 <div class="row"><div><div class="ey">MACHINES</div><div class="title">自販機</div><div class="subtitle">設備・訪問・販売データを管理</div></div><button class="primary pill" id="addMachine">＋追加</button></div>
 <div class="search"><span class="searchIcon">⌕</span><input id="machineSearch" placeholder="自販機名・住所・管理番号を検索"></div><div id="machineResults" class="results hidden"></div>
-<div class="section" id="machineList"></div>
+<div class="section"><div class="sectionhead"><b>メーカー設定</b><button class="pill" id="manageMakers">管理</button></div><div id="makerSummary" class="muted" style="margin-top:6px"></div></div><div class="section" id="machineList"></div>
 </section>
 
 <section id="ordersPage" class="page hidden">
@@ -126,7 +132,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
   <button class="primary" id="machineRoute">経路</button>
 </div>
 <div id="machineExtra" class="hidden">
-  <div class="formGroup"><label>自販機名</label><input id="mName"></div>
+  <div class="formGroup"><label>自販機名</label><input id="mName"></div><div class="formGroup"><label>メーカー</label><select id="mMaker"></select></div>
   <div class="formGroup"><label>管理番号</label><input id="mCode"></div>
   <div class="formGroup"><label>住所</label><input id="mAddress"></div>
   <div class="formGroup"><label>訪問曜日（複数可）</label><input id="mDays" placeholder="例：月,木"></div>
@@ -160,9 +166,18 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 <div class="modal" id="addMachineModal"><div class="sheet">
 <div class="modalTop"><div><div class="ey">NEW MACHINE</div><div class="title">自販機を追加</div></div><button class="pill" id="closeAdd">閉じる</button></div>
 <div class="notice">マップ上の位置を指定して登録できます。住所は自動取得後も手動修正できる設計です。</div>
-<div class="formGroup"><label>自販機名</label><input id="newName" placeholder="例：○○自販機"></div><div class="formGroup"><label>管理番号</label><input id="newCode" placeholder="例：A-001"></div><div class="formGroup"><label>住所（手動修正可）</label><input id="newAddress"></div><div class="formGroup"><label>GPS</label><input id="newGps" readonly></div>
+<div class="formGroup"><label>自販機名</label><input id="newName" placeholder="例：○○自販機"></div><div class="formGroup"><label>メーカー</label><select id="newMaker"></select></div><div class="formGroup"><label>管理番号</label><input id="newCode" placeholder="例：A-001"></div><div class="formGroup"><label>住所（手動修正可）</label><input id="newAddress"></div><div class="formGroup"><label>GPS</label><input id="newGps" readonly></div>
 <div class="actions"><button class="secondary" id="cancelAdd">キャンセル</button><button class="primary" id="saveAdd">登録</button></div>
 </div></div>
+<div class="modal" id="taskModal"><div class="sheet"><div class="modalTop"><div><div class="ey">NEW TASK</div><div class="title">タスク登録</div></div><button class="pill" id="closeTask">閉じる</button></div>
+<div class="formGroup"><label>タスク内容</label><textarea id="taskText" placeholder="例：新商品のPOPを張り替える"></textarea></div>
+<div class="formGroup"><label>対象メーカー</label><select id="taskTarget"><option value="all">全メーカー</option></select></div>
+<div class="notice">メーカーを指定すると、そのメーカーの自販機すべてに自動で紐付きます。</div>
+<div class="actions"><button class="secondary" id="cancelTask">キャンセル</button><button class="primary" id="saveTask">タスク登録</button></div></div></div>
+<div class="modal" id="makerModal"><div class="sheet"><div class="modalTop"><div><div class="ey">MAKERS</div><div class="title">メーカー設定</div></div><button class="pill" id="closeMaker">閉じる</button></div>
+<div class="formGroup"><label>メーカー名</label><input id="makerName" placeholder="例：サントリー"></div><div class="actions"><button class="secondary" id="cancelMaker">閉じる</button><button class="primary" id="saveMaker">メーカー追加</button></div>
+<div class="section"><div class="sectionhead"><b>登録済みメーカー</b></div><div id="makerList"></div></div></div></div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -173,7 +188,7 @@ var WEEK=['日','月','火','水','木','金','土'];
 var now=new Date(), today=iso(now), todayDay=WEEK[now.getDay()];
 var CYCLES={'毎日':1,'2日周期':2,'3日周期':3,'1週間に1回':7,'2週間に1回':14,'3週間に1回':21,'1ヶ月に1回':30};
 var key='vendrive_v7_data';
-var state={machines:[],history:[],tomorrowPlan:null};
+var state={machines:[],history:[],tomorrowPlan:null,tasks:[],makers:['コカ・コーラ','サントリー','KIRIN','アサヒ','伊藤園','DyDo']};
 var selectedMachine=null, selectedMapDay=todayDay, allRoutes=false, selectedOrderMachine=null, selectedOrderType=null, selectedProductSub=null, addPoint=null, leafletMap=null, machineLayer=null, routeLayer=null, currentLocationLayer=null, addingMachine=false, geoTimer=null;
 
 function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
@@ -186,7 +201,7 @@ function closeModal(id){$id(id).classList.remove('open')}
 function persist(){try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}}
 function migrateCoordinates(){state.machines.forEach(function(m){if(typeof m.lat==='number'&&typeof m.lng==='number'&&m.lat>=0&&m.lat<=100&&m.lng>=0&&m.lng<=100){m.lat=35.285+(m.lat/100)*0.06;m.lng=136.76+(m.lng/100)*0.09}});persist()}
 function load(){
-  try{var raw=localStorage.getItem(key);if(raw){var x=JSON.parse(raw);if(x&&Array.isArray(x.machines)){state=x}}}catch(e){}
+  try{var raw=localStorage.getItem(key);if(raw){var x=JSON.parse(raw);if(x&&Array.isArray(x.machines)){state=x;if(!Array.isArray(state.tasks))state.tasks=[];if(!Array.isArray(state.makers)||!state.makers.length)state.makers=['コカ・コーラ','サントリー','KIRIN','アサヒ','伊藤園','DyDo']}}}catch(e){}
   if(!state.machines.length){
     state.machines=[
       {id:'A',name:'自販機 A',code:'A-001',address:'愛知県一宮市',days:['木'],cycle:'3日周期',last:'2026-08-24',time:'指定なし',sales:'コーラ 5本/日・お茶 7本/日',memo:'駐車スペースに注意',lat:20,lng:20},
@@ -226,7 +241,7 @@ function card(m,context){
   var cls='item '+(m.visited?'done ':'')+(order?'order ':'')+(order?'urgent':'');
   var detail=order?(order.type+(order.sub?' ＞ '+order.sub:'')+' ・ '+timeLeft(order.createdAt)):m.cycle+' ・ '+m.time;
   var e=document.createElement('div');e.className=cls;
-  e.innerHTML='<div><b>'+esc(m.name)+'</b><div class="meta">'+esc(detail)+'</div></div><span class="badge '+badge+'">'+status+'</span>';
+  e.innerHTML='<div><b>'+esc(m.name)+'</b><div class="makerChip">'+esc(m.maker||'メーカー未設定')+'</div><div class="meta">'+esc(detail)+'</div></div><span class="badge '+badge+'">'+status+'</span>';
   e.onclick=function(){openMachine(m.id,order?'order':'normal')};return e;
 }
 function timeLeft(ts){
@@ -280,15 +295,15 @@ function renderOrders(){
   if(!pending.length)box.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">対応待ちのオーダーはありません。</div>';
   var hbox=$id('historyList');hbox.innerHTML='';(state.history||[]).slice().sort(function(a,b){return b.completedAt-a.completedAt}).forEach(function(h){var e=document.createElement('div');e.className='history';e.innerHTML='<b>'+esc(h.machineName)+'</b><div class="meta">'+esc(h.type)+(h.sub?' ＞ '+esc(h.sub):'')+(h.detail?' ・ '+esc(h.detail):'')+'<br>'+new Date(h.completedAt).toLocaleString('ja-JP')+'</div>';hbox.appendChild(e)});if(!hbox.children.length)hbox.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">過去30日間の対応履歴はありません。</div>';
 }
-function renderAll(){renderHeader();renderToday();renderMap();renderMachines(state.machines);renderOrders()}
+function renderAll(){renderHeader();renderTodayWithTasks();renderMachines(state.machines);renderOrders();renderTasks();renderMakers();refreshMakerOptions();if(!document.getElementById('mapPage').classList.contains('hidden'))renderMap()}
 function openMachine(id,mode){
   var m=state.machines.find(function(x){return x.id===id});if(!m)return;selectedMachine=m;
-  $id('machineModalTitle').textContent=m.name;$id('detailLast').textContent=m.last||'未登録';$id('detailSales').textContent=m.sales||'販売データ未登録';if(m.order){$id('detailOrderType').textContent=m.order.type+(m.order.sub?' ＞ '+m.order.sub:'');$id('detailOrderText').textContent=(m.order.detail||'詳細なし')+' ・ '+timeLeft(m.order.createdAt);$id('detailOrder').classList.remove('hidden')}else{$id('detailOrder').classList.add('hidden')};$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mDays').value=(m.days||[]).join(',');$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';$id('machineExtra').classList.add('hidden');$id('detailMore').textContent='詳細表示';
+  $id('machineModalTitle').textContent=m.name;$id('mMaker').innerHTML=state.makers.map(function(x){return '<option>'+esc(x)+'</option>'}).join('');$id('mMaker').value=m.maker||state.makers[0]||'';$id('detailLast').textContent=m.last||'未登録';$id('detailSales').textContent=m.sales||'販売データ未登録';if(m.order){$id('detailOrderType').textContent=m.order.type+(m.order.sub?' ＞ '+m.order.sub:'');$id('detailOrderText').textContent=(m.order.detail||'詳細なし')+' ・ '+timeLeft(m.order.createdAt);$id('detailOrder').classList.remove('hidden')}else{$id('detailOrder').classList.add('hidden')};$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mDays').value=(m.days||[]).join(',');$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';$id('machineExtra').classList.add('hidden');$id('detailMore').textContent='詳細表示';
   
   openModal('machineModal');
 }
 /* ORDER DATA IS STORED SEPARATELY FROM MEMO. */
-function saveMachineData(){if(!selectedMachine)return;var m=selectedMachine;m.name=$id('mName').value.trim()||m.name;m.code=$id('mCode').value.trim();m.address=$id('mAddress').value.trim();m.days=$id('mDays').value.split(',').map(function(x){return x.trim()}).filter(Boolean);m.cycle=$id('mCycle').value;m.last=$id('mLast').value||m.last;m.time=$id('mTime').value||'指定なし';m.sales=$id('mSales').value;m.memo=$id('mMemo').value;persist();closeModal('machineModal');renderAll();toast('保存しました')}
+function saveMachineData(){if(!selectedMachine)return;var m=selectedMachine;m.name=$id('mName').value.trim()||m.name;m.maker=$id('mMaker').value;m.code=$id('mCode').value.trim();m.address=$id('mAddress').value.trim();m.days=$id('mDays').value.split(',').map(function(x){return x.trim()}).filter(Boolean);m.cycle=$id('mCycle').value;m.last=$id('mLast').value||m.last;m.time=$id('mTime').value||'指定なし';m.sales=$id('mSales').value;m.memo=$id('mMemo').value;persist();closeModal('machineModal');renderAll();toast('保存しました')}
 function completeVisit(){if(!selectedMachine)return;selectedMachine.visited=true;selectedMachine.last=today;selectedMachine.force=null;selectedMachine.skip=null;persist();closeModal('machineModal');renderAll();toast('訪問完了')}
 function skipVisit(){if(!selectedMachine)return;selectedMachine.skip=today;selectedMachine.visited=false;persist();closeModal('machineModal');renderAll();toast('本日の訪問をスキップ')}
 function forceVisit(){if(!selectedMachine)return;selectedMachine.force=today;selectedMachine.visited=false;persist();closeModal('machineModal');renderAll();toast('本日の臨時訪問に追加')}
@@ -328,8 +343,26 @@ function reverseGeocode(lat,lng){
 function saveNewMachine(){
   var id=($id('newCode').value.trim()||'M-'+Date.now().toString().slice(-6));if(state.machines.some(function(m){return m.code===id||m.id===id})){toast('管理番号が重複しています');return}
   if(!addPoint){toast('マップ上の位置を指定してください');return}
-  state.machines.push({id:id,name:$id('newName').value.trim()||'新規自販機',code:id,address:$id('newAddress').value.trim(),days:[todayDay],cycle:'1週間に1回',last:today,time:'指定なし',sales:'',memo:'',lat:addPoint.lat,lng:addPoint.lng});persist();closeModal('addMachineModal');renderAll();toast('自販機を登録しました');addPoint=null
+  state.machines.push({id:id,name:$id('newName').value.trim()||'新規自販機',maker:$id('newMaker').value||state.makers[0]||'',code:id,address:$id('newAddress').value.trim(),days:[todayDay],cycle:'1週間に1回',last:today,time:'指定なし',sales:'',memo:'',lat:addPoint.lat,lng:addPoint.lng});persist();closeModal('addMachineModal');renderAll();toast('自販機を登録しました');addPoint=null
 }
+
+function renderMakers(){
+ var box=$id('makerList');if(box){box.innerHTML='';state.makers.forEach(function(m,i){var e=document.createElement('div');e.className='item';e.innerHTML='<div><b>'+esc(m)+'</b><div class="meta">'+state.machines.filter(function(x){return x.maker===m}).length+'台</div></div>'+(state.makers.length>1?'<button class="pill">削除</button>':'');if(e.querySelector('button'))e.querySelector('button').onclick=function(){if(state.machines.some(function(x){return x.maker===m})){toast('使用中のメーカーは削除できません');return}state.makers.splice(i,1);persist();renderMakers();refreshMakerOptions()};box.appendChild(e)})}
+ var sum=$id('makerSummary');if(sum)sum.textContent=state.makers.length+'メーカー：'+state.makers.join(' ・ ')
+}
+function refreshMakerOptions(){var a=$id('taskTarget');if(a)a.innerHTML='<option value="all">全メーカー</option>'+state.makers.map(function(m){return'<option value="'+esc(m)+'">'+esc(m)+'</option>'}).join('')}
+function renderTasks(){
+ var active=(state.tasks||[]).filter(function(t){return !t.completed}),box=$id('taskList');if(!box)return;$id('taskCount').textContent=active.length;box.innerHTML='';
+ if(!active.length){box.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">未完了タスクはありません。</div>';return}
+ active.forEach(function(t){var ms=state.machines.filter(function(m){return t.target==='all'||m.maker===t.target});var done=ms.filter(function(m){return m.taskDone&&m.taskDone[t.id]}).length;var e=document.createElement('div');e.className='item taskItem';e.innerHTML='<div><b>'+esc(t.text)+'</b><div class="taskMeta">'+esc(t.target==='all'?'全メーカー':t.target)+' ・ 対象 '+ms.length+'台'+(ms.length?' ・ 完了 '+done+'/'+ms.length+'台':'')+'</div></div><button class="badge b-green">タスク完了</button>';e.querySelector('button').onclick=function(){t.completed=true;t.completedAt=Date.now();persist();renderAll()};box.appendChild(e)})
+}
+function renderTodayWithTasks(){
+ renderToday();var old=$id('todayTaskBlock');if(old)old.remove();var a=(state.tasks||[]).filter(function(t){return !t.completed});if(!a.length)return;
+ var b=document.createElement('div');b.id='todayTaskBlock';b.className='section';b.innerHTML='<div class="sectionhead"><b>重要タスク</b><span class="badge b-red">'+a.length+'件</span></div>';
+ a.slice(0,5).forEach(function(t){var e=document.createElement('div');e.className='item taskItem';e.innerHTML='<div><b>'+esc(t.text)+'</b><div class="taskMeta">'+esc(t.target==='all'?'全メーカー':t.target)+'</div></div><span class="badge b-red">未完了</span>';b.appendChild(e)});
+ var h=$id('todayPage').querySelector('.hero');h.parentNode.insertBefore(b,h)
+}
+
 function initDays(){
   var b=$id('mapDays');b.innerHTML=['月','火','水','木','金','土','日'].map(function(x){return'<button class="day '+(x===selectedMapDay?'active':'')+'" data-day="'+x+'">'+x+'曜</button>'}).join('');
   b.querySelectorAll('.day').forEach(function(e){e.onclick=function(){selectedMapDay=e.dataset.day;allRoutes=false;$id('allRoutes').textContent='全ルート';initDays();renderMap()}})
@@ -340,15 +373,22 @@ function bind(){
   $id('finishDay').onclick=finishDay
   $id('closeTomorrow').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowLater').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowSave').onclick=function(){persist();closeModal('tomorrowModal');toast('明日の予定を保存しました')}
   $id('closeMachine').onclick=function(){closeModal('machineModal')};$id('detailMore').onclick=function(){var e=$id('machineExtra');e.classList.toggle('hidden');this.textContent=e.classList.contains('hidden')?'詳細表示':'詳細を閉じる'};$id('saveMachine').onclick=saveMachineData;$id('completeMachine').onclick=completeVisit;$id('skipMachine').onclick=skipVisit;$id('forceMachine').onclick=forceVisit;$id('machineRoute').onclick=function(){if(selectedMachine)location.href='https://www.google.com/maps/dir/?api=1&destination='+(typeof selectedMachine.lat==='number'&&typeof selectedMachine.lng==='number'?selectedMachine.lat+','+selectedMachine.lng:encodeURIComponent(selectedMachine.address||selectedMachine.name))}
-  $id('addOrder').onclick=openOrder;$id('closeOrder').onclick=function(){closeModal('orderModal')};$id('cancelOrder').onclick=function(){closeModal('orderModal')};$id('orderMachineSearch').oninput=orderSearch;$id('saveOrder').onclick=saveOrder
+  $id('addOrder').onclick=openOrder;
+  $id('addTask').onclick=function(){refreshMakerOptions();$id('taskText').value='';openModal('taskModal')};
+  $id('closeTask').onclick=function(){closeModal('taskModal')};$id('cancelTask').onclick=function(){closeModal('taskModal')};
+  $id('saveTask').onclick=function(){var t=$id('taskText').value.trim();if(!t){toast('タスク内容を入力してください');return}state.tasks.push({id:'T-'+Date.now(),text:t,target:$id('taskTarget').value,createdAt:Date.now(),completed:false});persist();closeModal('taskModal');renderAll();toast('タスクを登録しました')};
+  $id('manageMakers').onclick=function(){renderMakers();openModal('makerModal')};$id('closeMaker').onclick=function(){closeModal('makerModal')};$id('cancelMaker').onclick=function(){closeModal('makerModal')};
+  $id('saveMaker').onclick=function(){var n=$id('makerName').value.trim();if(!n){toast('メーカー名を入力してください');return}if(state.makers.indexOf(n)>=0){toast('同じメーカーが登録されています');return}state.makers.push(n);$id('makerName').value='';persist();renderMakers();refreshMakerOptions();toast('メーカーを追加しました')};$id('closeOrder').onclick=function(){closeModal('orderModal')};$id('cancelOrder').onclick=function(){closeModal('orderModal')};$id('orderMachineSearch').oninput=orderSearch;$id('saveOrder').onclick=saveOrder
   document.querySelectorAll('.orderType').forEach(function(b){b.onclick=function(){document.querySelectorAll('.orderType').forEach(function(x){x.classList.remove('active')});b.classList.add('active');selectedOrderType=b.dataset.type;selectedProductSub=null;$id('productSub').classList.toggle('hidden',selectedOrderType!=='商品関連');document.querySelectorAll('.subtype').forEach(function(x){x.classList.remove('active')})}})
   document.querySelectorAll('.subtype').forEach(function(b){b.onclick=function(){document.querySelectorAll('.subtype').forEach(function(x){x.classList.remove('active')});b.classList.add('active');selectedProductSub=b.dataset.sub}})
   $id('machineSearch').oninput=function(){var q=this.value.trim().toLowerCase();var list=state.machines.filter(function(m){return !q||[m.name,m.address,m.code,m.id].join(' ').toLowerCase().indexOf(q)>=0});var r=$id('machineResults');r.innerHTML='';list.slice(0,12).forEach(function(m){var e=document.createElement('div');e.className='result';e.innerHTML='<b>'+esc(m.name)+'</b><small>'+esc(m.address||'住所未登録')+' ・ '+esc(m.code||m.id)+'</small>';e.onclick=function(){openMachine(m.id)};r.appendChild(e)});r.classList.toggle('hidden',!q||!list.length);if(!q)renderMachines(state.machines)}
-  $id('addMachine').onclick=function(){addPoint=null;$id('newGps').value='未指定（後からマップで設定）';openModal('addMachineModal')}
-  ensureMap();
+  $id('addMachine').onclick=function(){addPoint=null;$id('newMaker').innerHTML=state.makers.map(function(x){return '<option>'+esc(x)+'</option>'}).join('');$id('newGps').value='未指定（後からマップで設定）';openModal('addMachineModal')}
   $id('mapAdd').onclick=function(e){e.stopPropagation();addingMachine=true;$id('map').classList.add('adding');toast('登録位置をタップしてください')}
   $id('locateMe').onclick=function(){if(!navigator.geolocation){toast('この端末では現在地取得に対応していません');return}toast('現在地を取得しています…');navigator.geolocation.getCurrentPosition(function(pos){var lat=pos.coords.latitude,lng=pos.coords.longitude;currentLocationLayer.clearLayers();L.circleMarker([lat,lng],{radius:8,color:'#fff',weight:3,fillColor:'#111',fillOpacity:1}).addTo(currentLocationLayer);leafletMap.setView([lat,lng],16);toast('現在地を表示しました')},function(){toast('現在地を取得できませんでした')},{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}
   $id('closeAdd').onclick=function(){closeModal('addMachineModal');addPoint=null};$id('cancelAdd').onclick=function(){closeModal('addMachineModal');addPoint=null};$id('saveAdd').onclick=saveNewMachine
+
+  var addrBox=$id('addressResults'),addrInput=$id('addressSearch'),addrTimer=null;
+  addrInput.oninput=function(){var q=this.value.trim();clearTimeout(addrTimer);if(!q){addrBox.classList.add('hidden');addrBox.innerHTML='';return}addrTimer=setTimeout(function(){addrBox.classList.remove('hidden');addrBox.innerHTML='<div class="result"><b>住所を検索中…</b></div>';fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=ja&q='+encodeURIComponent(q)).then(function(r){if(!r.ok)throw new Error('http');return r.json()}).then(function(items){addrBox.innerHTML='';if(!items.length){addrBox.innerHTML='<div class="result"><b>候補が見つかりません</b></div>';return}items.forEach(function(x){var e=document.createElement('div');e.className='result';e.innerHTML='<b>'+esc(x.display_name)+'</b>';e.onclick=function(){var lat=parseFloat(x.lat),lng=parseFloat(x.lon);if(!isFinite(lat)||!isFinite(lng))return;ensureMap();leafletMap.setView([lat,lng],17);addPoint={lat:lat,lng:lng};$id('newGps').value=lat.toFixed(6)+', '+lng.toFixed(6);$id('newAddress').value=x.display_name;$id('newMaker').innerHTML=state.makers.map(function(m){return'<option>'+esc(m)+'</option>'}).join('');addrBox.classList.add('hidden');openModal('addMachineModal')};addrBox.appendChild(e)})}).catch(function(){addrBox.innerHTML='<div class="result"><b>住所検索に失敗しました</b><small>通信状況を確認してください</small></div>'})},450)};
   $id('zoomIn').onclick=function(){leafletMap.zoomIn()};$id('zoomOut').onclick=function(){leafletMap.zoomOut()}
 }
 load();initDays();bind();renderAll();
