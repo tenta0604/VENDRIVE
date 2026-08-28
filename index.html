@@ -59,7 +59,13 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 .mapAdd{position:absolute;bottom:10px;left:10px;z-index:1000}.maptag{position:absolute;top:10px;left:10px;z-index:1000;background:#fffffff2;border:1px solid #ddd;border-radius:9px;padding:6px 8px;font-size:9px;font-weight:900}
 .vendrive-pin{background:transparent;border:0}.pinDot{width:25px;height:25px;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px #0005;display:grid;place-items:center}.pinDot.normal{background:#2979ff}.pinDot.time{background:#f59e0b}.pinDot.done{background:#9ca3af;opacity:.55}.pinDot.order{background:#7c3aed}.pinDot.urgent{background:#dc2626;animation:pinPulse 1.35s infinite}.pinDot.order:after{content:"!";color:#fff;font-size:12px;font-weight:950}.pinDot.orderSoon{background:#f59e0b}.currentDot{width:16px;height:16px;border-radius:50%;background:#111;border:3px solid #fff;box-shadow:0 0 0 7px #1112}
 @keyframes pinPulse{0%,100%{box-shadow:0 0 0 0 #dc262655}50%{box-shadow:0 0 0 8px #dc262600}}
-</style><style>.tabs{grid-template-columns:repeat(5,minmax(0,1fr))}.taskItem{border-left:4px solid #dc2626!important}.taskMeta{font-size:10px;color:#777;margin-top:4px;line-height:1.45}.makerChip{display:inline-block;padding:4px 7px;border-radius:99px;background:#eff0f1;font-size:9px;font-weight:850;margin-top:5px}</style></head>
+</style><style>.tabs{grid-template-columns:repeat(5,minmax(0,1fr))}.taskItem{border-left:4px solid #dc2626!important}.taskMeta{font-size:10px;color:#777;margin-top:4px;line-height:1.45}.makerChip{display:inline-block;padding:4px 7px;border-radius:99px;background:#eff0f1;font-size:9px;font-weight:850;margin-top:5px}</style><style>
+.swipeRow{position:relative;overflow:hidden;border-radius:15px;margin-top:7px}
+.swipeAction{position:absolute;inset:0 0 0 auto;width:92px;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900}
+.swipeCard{position:relative;z-index:1;transition:transform .18s ease;touch-action:pan-y}
+.swipeCard.swiping{transition:none}
+.swipeHint{font-size:8px;color:#999;margin-right:4px}
+</style></head>
 <body>
 <div class="app">
 <header class="header"><div class="brand"><div class="mark">V</div><div><div class="name">VENDRIVE</div><div class="date" id="headerDate"></div></div></div></header>
@@ -75,7 +81,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 <div class="ey">TODAY</div><div class="title">本日の訪問</div><div class="subtitle" id="todaySub"></div>
 <div class="hero"><div class="ey">WORK PROGRESS</div><div class="heroTitle"><span id="heroDone">0</span> / <span id="heroTotal">0</span> 台</div><div class="heroSub" id="heroText">本日の訪問を開始しましょう</div><div class="progress"><i id="progressBar"></i></div></div>
 <div class="stats"><div class="kpi"><span>未訪問</span><b id="todayTodo">0</b></div><div class="kpi"><span>訪問済</span><b id="todayVisited">0</b></div><div class="kpi"><span>オーダー</span><b id="todayOrders">0</b></div></div>
-<div class="section"><div class="sectionhead"><b>本日の訪問先</b><span class="muted" id="todayRoute"></span></div><div id="todayList"></div></div>
+<div class="section"><div class="sectionhead"><b>本日の訪問先</b><span class="swipeHint">左スワイプで訪問完了</span><span class="muted" id="todayRoute"></span></div><div id="todayList"></div></div>
 <div class="section"><button class="bigComplete" id="finishDay">本日の業務終了</button></div>
 </section>
 
@@ -255,7 +261,7 @@ function renderToday(){
   $id('heroDone').textContent=done;$id('heroTotal').textContent=t.length;$id('heroText').textContent=t.length?(done===t.length?'本日の訪問がすべて完了しています':'本日の訪問を進めましょう'):'本日の訪問予定はありません';
   $id('progressBar').style.width=(t.length?Math.round(done/t.length*100):0)+'%';
   $id('todayTodo').textContent=t.filter(function(m){return !m.visited}).length;$id('todayVisited').textContent=done;$id('todayOrders').textContent=orders;$id('todayRoute').textContent=todayDay+'曜ルート';
-  var box=$id('todayList');box.innerHTML='';t.forEach(function(m){box.appendChild(card(m,'today'))});
+  var box=$id('todayList');box.innerHTML='';t.forEach(function(m){var w=document.createElement('div');w.className='swipeRow';w.innerHTML='<div class="swipeAction">訪問完了</div>';var c=card(m,'today');c.classList.add('swipeCard');w.appendChild(c);box.appendChild(w);if(!m.visited)makeSwipeComplete(w,m)});
   if(!t.length)box.innerHTML='<div class="card" style="padding:14px;margin-top:7px;color:#777;font-size:11px">本日の訪問予定はありません。</div>';
 }
 function markerClass(m){if(m.order){var left=86400000-(Date.now()-m.order.createdAt);return left<=0?'urgent':left<=6*3600000?'urgent':'order'}return m.visited?'done':m.time!=='指定なし'?'time':'normal'}
@@ -356,6 +362,15 @@ function renderTasks(){
  if(!active.length){box.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">未完了タスクはありません。</div>';return}
  active.forEach(function(t){var ms=state.machines.filter(function(m){return t.target==='all'||m.maker===t.target});var done=ms.filter(function(m){return m.taskDone&&m.taskDone[t.id]}).length;var e=document.createElement('div');e.className='item taskItem';e.innerHTML='<div><b>'+esc(t.text)+'</b><div class="taskMeta">'+esc(t.target==='all'?'全メーカー':t.target)+' ・ 対象 '+ms.length+'台'+(ms.length?' ・ 完了 '+done+'/'+ms.length+'台':'')+'</div></div><button class="badge b-green">タスク完了</button>';e.querySelector('button').onclick=function(){t.completed=true;t.completedAt=Date.now();persist();renderAll()};box.appendChild(e)})
 }
+
+function makeSwipeComplete(wrapper,m){
+ var card=wrapper.querySelector('.swipeCard'),sx=0,sy=0,dx=0,tracking=false;
+ function reset(){card.classList.remove('swiping');card.style.transform='translateX(0)';dx=0;tracking=false}
+ card.addEventListener('touchstart',function(e){if(e.touches.length!==1)return;sx=e.touches[0].clientX;sy=e.touches[0].clientY;tracking=true;card.classList.add('swiping')},{passive:true});
+ card.addEventListener('touchmove',function(e){if(!tracking)return;var x=e.touches[0].clientX,y=e.touches[0].clientY,mx=x-sx,my=y-sy;if(Math.abs(my)>Math.abs(mx)+8){tracking=false;card.classList.remove('swiping');return}dx=Math.min(0,Math.max(-105,mx));if(dx<0)card.style.transform='translateX('+dx+'px)'},{passive:true});
+ card.addEventListener('touchend',function(){if(!tracking)return;card.classList.remove('swiping');if(dx<=-70){card.style.transform='translateX(-92px)';setTimeout(function(){m.visited=true;m.last=today;m.force=null;m.skip=null;persist();renderAll();toast('訪問完了')},140)}else reset()});
+}
+
 function renderTodayWithTasks(){
  renderToday();var old=$id('todayTaskBlock');if(old)old.remove();var a=(state.tasks||[]).filter(function(t){return !t.completed});if(!a.length)return;
  var b=document.createElement('div');b.id='todayTaskBlock';b.className='section';b.innerHTML='<div class="sectionhead"><b>重要タスク</b><span class="badge b-red">'+a.length+'件</span></div>';
