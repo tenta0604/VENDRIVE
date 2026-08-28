@@ -39,6 +39,13 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:120;background:#111;color:#fff;padding:9px 13px;border-radius:99px;font-size:10px;font-weight:850;display:none}.toast.show{display:block}
 @media(max-width:360px){.tabs button{font-size:11px}.main{padding:12px}.title{font-size:23px}}
 </style>
+<style>
+.pin{width:30px;height:30px;border-radius:50%;transform:translate(-50%,-50%);border:3px solid #fff;display:grid;place-items:center}
+.pin span{display:none}
+.pin.orderPin:after{content:"!";color:#fff;font-size:13px;font-weight:950}
+.pin.orderNormal{background:#7c3aed}.pin.orderUrgent{background:#dc2626;animation:orderPulse 1.35s infinite}.pin.timePin{background:#f59e0b}.pin.normalPin{background:#2979ff}.pin.donePin{background:#9ca3af;opacity:.5}
+@keyframes orderPulse{0%,100%{box-shadow:0 0 0 0 #dc262655}50%{box-shadow:0 0 0 8px #dc262600}}
+</style>
 </head>
 <body>
 <div class="app">
@@ -85,12 +92,32 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 </div>
 
 <div class="modal" id="machineModal"><div class="sheet">
-<div class="modalTop"><div><div class="ey">MACHINE DETAIL</div><div class="title" id="machineModalTitle"></div></div><button class="pill" id="closeMachine">閉じる</button></div>
-<div class="formGroup"><label>自販機名</label><input id="mName"></div><div class="formGroup"><label>管理番号</label><input id="mCode"></div><div class="formGroup"><label>住所</label><input id="mAddress"></div><div class="formGroup"><label>訪問曜日（複数可）</label><input id="mDays" placeholder="例：月,木"></div>
-<div class="formGroup"><label>訪問周期</label><select id="mCycle"><option>毎日</option><option>2日周期</option><option>3日周期</option><option>1週間に1回</option><option>2週間に1回</option><option>3週間に1回</option><option>1ヶ月に1回</option></select></div>
-<div class="formGroup"><label>前回訪問日</label><input id="mLast" type="date"></div><div class="formGroup"><label>訪問時間</label><input id="mTime" placeholder="例：14:00〜16:00"></div><div class="formGroup"><label>販売データ</label><textarea id="mSales"></textarea></div><div class="formGroup"><label>メモ</label><textarea id="mMemo"></textarea></div>
-<div class="actions"><button class="secondary" id="skipMachine">訪問スキップ</button><button class="secondary" id="forceMachine">臨時訪問</button></div>
-<div class="actions"><button class="primary" id="saveMachine">保存</button><button class="secondary" id="completeMachine">訪問完了</button><button class="primary" id="machineRoute">経路</button></div>
+<div class="modalTop"><div><div class="ey">MACHINE</div><div class="title" id="machineModalTitle"></div></div><button class="pill" id="closeMachine">閉じる</button></div>
+<div class="card" style="padding:14px;margin-top:11px">
+  <div class="muted">前回訪問日</div><b id="detailLast" style="font-size:14px"></b>
+  <div class="muted" style="margin-top:10px">販売データ</div><div id="detailSales" style="font-size:11px;margin-top:3px;line-height:1.5"></div>
+</div>
+<div class="actions" style="margin-top:10px">
+  <button class="secondary" id="detailMore">詳細表示</button>
+  <button class="primary" id="completeMachine">訪問完了</button>
+</div>
+<div class="actions">
+  <button class="secondary" id="skipMachine">訪問スキップ</button>
+  <button class="secondary" id="forceMachine">臨時訪問</button>
+  <button class="primary" id="machineRoute">経路</button>
+</div>
+<div id="machineExtra" class="hidden">
+  <div class="formGroup"><label>自販機名</label><input id="mName"></div>
+  <div class="formGroup"><label>管理番号</label><input id="mCode"></div>
+  <div class="formGroup"><label>住所</label><input id="mAddress"></div>
+  <div class="formGroup"><label>訪問曜日（複数可）</label><input id="mDays" placeholder="例：月,木"></div>
+  <div class="formGroup"><label>訪問周期</label><select id="mCycle"><option>毎日</option><option>2日周期</option><option>3日周期</option><option>1週間に1回</option><option>2週間に1回</option><option>3週間に1回</option><option>1ヶ月に1回</option></select></div>
+  <div class="formGroup"><label>前回訪問日</label><input id="mLast" type="date"></div>
+  <div class="formGroup"><label>訪問時間</label><input id="mTime" placeholder="例：14:00〜16:00"></div>
+  <div class="formGroup"><label>販売データ</label><textarea id="mSales"></textarea></div>
+  <div class="formGroup"><label>メモ</label><textarea id="mMemo"></textarea></div>
+  <div class="actions"><button class="primary" id="saveMachine">保存</button></div>
+</div>
 </div></div>
 
 <div class="modal" id="orderModal"><div class="sheet">
@@ -198,7 +225,7 @@ function renderMap(){
   $id('mapTag').textContent=allRoutes?'MAP · 全ルート':'MAP · '+selectedMapDay+'曜';
   var t=targets(selectedMapDay,allRoutes);$id('mapCount').textContent=t.length+'台';var map=$id('map');
   map.querySelectorAll('.pin').forEach(function(e){e.remove()});
-  t.forEach(function(m,i){var p=document.createElement('button');p.className='pin '+(m.visited?'gray':m.order?'purple':m.time!=='指定なし'?'orange':(['red','blue'][i%2]));p.style.left=(m.lat||50)+'%';p.style.top=(m.lng||50)+'%';p.innerHTML='<span>'+esc(m.id)+'</span>';p.title=m.name;p.onclick=function(e){e.stopPropagation();openMachine(m.id,m.order?'order':'normal')};map.appendChild(p)});
+  t.forEach(function(m,i){var p=document.createElement('button');p.className='pin '+(m.order?'orderPin '+(timeLeft(m.order.createdAt).indexOf('期限超過')===0?'orderUrgent':'orderNormal'):(m.visited?'donePin':m.time!=='指定なし'?'timePin':'normalPin'));p.style.left=(m.lat||50)+'%';p.style.top=(m.lng||50)+'%';p.innerHTML='<span></span>';p.title=m.name;p.onclick=function(e){e.stopPropagation();openMachine(m.id,m.order?'order':'normal')};map.appendChild(p)});
   var box=$id('mapList');box.innerHTML='';t.forEach(function(m){box.appendChild(card(m,'map'))});
 }
 function renderMachines(list){
@@ -213,7 +240,7 @@ function renderOrders(){
 function renderAll(){renderHeader();renderToday();renderMap();renderMachines(state.machines);renderOrders()}
 function openMachine(id,mode){
   var m=state.machines.find(function(x){return x.id===id});if(!m)return;selectedMachine=m;
-  $id('machineModalTitle').textContent=m.name;$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mDays').value=(m.days||[]).join(',');$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';
+  $id('machineModalTitle').textContent=m.name;$id('detailLast').textContent=m.last||'未登録';$id('detailSales').textContent=m.sales||'販売データ未登録';$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mDays').value=(m.days||[]).join(',');$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';$id('machineExtra').classList.add('hidden');$id('detailMore').textContent='詳細表示';
   if(mode==='order'&&m.order){$id('mMemo').value='【オーダー】 '+m.order.type+(m.order.sub?' ＞ '+m.order.sub:'')+(m.order.detail?' / '+m.order.detail:'')+'\n'+($id('mMemo').value||'') }
   openModal('machineModal');
 }
@@ -266,7 +293,7 @@ function bind(){
   $id('allRoutes').onclick=function(){allRoutes=!allRoutes;$id('allRoutes').textContent=allRoutes?'曜日ルート':'全ルート';renderMap()}
   $id('finishDay').onclick=finishDay
   $id('closeTomorrow').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowLater').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowSave').onclick=function(){persist();closeModal('tomorrowModal');toast('明日の予定を保存しました')}
-  $id('closeMachine').onclick=function(){closeModal('machineModal')};$id('saveMachine').onclick=saveMachineData;$id('completeMachine').onclick=completeVisit;$id('skipMachine').onclick=skipVisit;$id('forceMachine').onclick=forceVisit;$id('machineRoute').onclick=function(){if(selectedMachine)location.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(selectedMachine.address||selectedMachine.name)}
+  $id('closeMachine').onclick=function(){closeModal('machineModal')};$id('detailMore').onclick=function(){var e=$id('machineExtra');e.classList.toggle('hidden');this.textContent=e.classList.contains('hidden')?'詳細表示':'詳細を閉じる'};$id('saveMachine').onclick=saveMachineData;$id('completeMachine').onclick=completeVisit;$id('skipMachine').onclick=skipVisit;$id('forceMachine').onclick=forceVisit;$id('machineRoute').onclick=function(){if(selectedMachine)location.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(selectedMachine.address||selectedMachine.name)}
   $id('addOrder').onclick=openOrder;$id('closeOrder').onclick=function(){closeModal('orderModal')};$id('cancelOrder').onclick=function(){closeModal('orderModal')};$id('orderMachineSearch').oninput=orderSearch;$id('saveOrder').onclick=saveOrder
   document.querySelectorAll('.orderType').forEach(function(b){b.onclick=function(){document.querySelectorAll('.orderType').forEach(function(x){x.classList.remove('active')});b.classList.add('active');selectedOrderType=b.dataset.type;selectedProductSub=null;$id('productSub').classList.toggle('hidden',selectedOrderType!=='商品関連');document.querySelectorAll('.subtype').forEach(function(x){x.classList.remove('active')})}})
   document.querySelectorAll('.subtype').forEach(function(b){b.onclick=function(){document.querySelectorAll('.subtype').forEach(function(x){x.classList.remove('active')});b.classList.add('active');selectedProductSub=b.dataset.sub}})
