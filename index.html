@@ -296,7 +296,7 @@ function nextVisitDate(m){
 function card(m,context){
   var order=m.order, status=order?'オーダー':m.visited?'訪問済':'未訪問';
   var badge=order?'b-purple':m.visited?'b-gray':'b-red';
-  var cls='item '+(m.visited?'done ':'')+(order?'order ':'')+(order?'urgent':'');
+  var cls='item '+(m.visited&&!order?'done ':'')+(order?'order ':'')+(order?'urgent':'');
   var detail=order?(order.type+(order.sub?' ＞ '+order.sub:'')+' ・ '+timeLeft(order.createdAt)):m.cycle+' ・ '+m.time;
   var e=document.createElement('div');e.className=cls;
   var right=context==='machines'?'':('<span class="badge '+badge+'">'+status+'</span>');
@@ -309,7 +309,7 @@ function timeLeft(ts){
 }
 function renderHeader(){$id('headerDate').textContent=now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日（'+todayDay+'）'}
 function showTodayStat(kind){
-var list=targets(todayDay,false),arr=kind==='todo'?list.filter(function(m){return !m.visited}):kind==='done'?list.filter(function(m){return m.visited}):state.machines.filter(function(m){return !!m.order});
+var list=targets(todayDay,false),arr=kind==='todo'?list.filter(function(m){return !m.visited||!!m.order}):kind==='done'?list.filter(function(m){return m.visited&&!m.order}):state.machines.filter(function(m){return !!m.order});
 $id('statsModalTitle').textContent=kind==='todo'?'未訪問':kind==='done'?'訪問済':'オーダー';
 var box=$id('statsList');box.innerHTML='';
 if(!arr.length)box.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">該当する自販機はありません。</div>';
@@ -327,7 +327,7 @@ location.href='https://www.google.com/maps/dir/?api=1&destination='+dest
 }
 
 function renderToday(){
-  var t=targets(todayDay,false), done=t.filter(function(m){return m.visited}).length, orders=state.machines.filter(function(m){return m.order}).length;
+  var t=targets(todayDay,false), done=t.filter(function(m){return m.visited&&!m.order}).length, orders=state.machines.filter(function(m){return m.order}).length;
   $id('todaySub').textContent=todayDay+'曜日の訪問予定';
   $id('heroDone').textContent=done;$id('heroTotal').textContent=t.length;$id('heroText').textContent=t.length?(done===t.length?'本日の訪問がすべて完了しています':'本日の訪問を進めましょう'):'本日の訪問予定はありません';
   $id('progressBar').style.width=(t.length?Math.round(done/t.length*100):0)+'%';
@@ -408,9 +408,12 @@ function renderMap(){
       icon=L.divIcon({className:'vendrive-route-pin',html:html,iconSize:[29,29],iconAnchor:[14.5,14.5]});
     }else if(mode==='today'){
       var due=isDue(m,todayDay);
-      if(m.visited){
+      if(m.order){
+        var orderCls=markerClass(m);
+        html='<div class="pinDot '+orderCls+'"></div>';
+      }else if(m.visited){
         html='<div class="pinDot done todayDonePin"></div>';
-      }else if(!due && !m.order && m.force!==today){
+      }else if(!due && m.force!==today){
         html='<div class="mapSlashPin">／</div>';
       }else{
         var cls=markerClass(m);
