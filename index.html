@@ -199,6 +199,7 @@ html,body{overscroll-behavior-y:none}body{-webkit-user-select:none;user-select:n
 <div class="hero" style="margin-top:10px"><div class="ey">TOMORROW</div><div class="heroTitle" id="tomorrowDate"></div><div class="heroSub" id="tomorrowSummary"></div></div>
 <div class="stats"><div class="kpi"><span>訪問予定</span><b id="tomorrowVisits">0</b></div><div class="kpi"><span>時間指定</span><b id="tomorrowTimed">0</b></div><div class="kpi"><span>オーダー</span><b id="tomorrowOrders">0</b></div></div>
 <div class="section"><div class="sectionhead"><b>明日の訪問先</b><span class="muted">除外できます</span></div><div id="tomorrowList"></div></div><div class="section"><div class="sectionhead"><b>未完了タスク</b><span class="muted">明日の対象</span></div><div id="tomorrowTasks"></div></div>
+<div class="actions"><button class="secondary" id="tomorrowMap">明日の予定をMAPで確認</button></div>
 <div class="actions"><button class="secondary" id="tomorrowLater">確認せず終了</button><button class="primary" id="tomorrowSave">予定を保存</button></div>
 </div></div>
 
@@ -228,7 +229,7 @@ var now=new Date(), today=iso(now), todayDay=WEEK[now.getDay()];
 var CYCLES={'毎日':1,'2日周期':2,'3日周期':3,'1週間に1回':7,'2週間に1回':14,'3週間に1回':21,'1ヶ月に1回':30};
 var key='vendrive_v7_data';
 var state={machines:[],offices:[],history:[],tomorrowPlan:null,tasks:[],makers:['コカ・コーラ','サントリー','KIRIN','アサヒ','伊藤園','DyDo','ポッカサッポロ','大塚製薬']};
-var selectedMachine=null, selectedMapDay=todayDay, mapTodayMode=true, allRoutes=false, selectedOrderMachine=null, selectedOrderType=null, selectedProductSub=null, addPoint=null, leafletMap=null, machineLayer=null, routeLayer=null, currentLocationLayer=null, addingMachine=false,addingOffice=false, geoTimer=null;
+var selectedMachine=null, selectedMapDay=todayDay, mapTodayMode=true, mapTomorrowMode=false, allRoutes=false, selectedOrderMachine=null, selectedOrderType=null, selectedProductSub=null, addPoint=null, leafletMap=null, machineLayer=null, routeLayer=null, currentLocationLayer=null, addingMachine=false,addingOffice=false, geoTimer=null;
 
 function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function diff(a,b){return Math.floor((new Date(a+'T00:00:00')-new Date(b+'T00:00:00'))/86400000)}
@@ -377,23 +378,37 @@ function renderOffices(){
    box.appendChild(e);
  });
 }
+function makerPinColor(name){
+  var palette=['#2563eb','#dc2626','#16a34a','#ea580c','#7c3aed','#db2777','#0891b2','#92400e','#0f766e','#4f46e5'];
+  var g=makerGroup(name)||'未設定',n=0;
+  for(var i=0;i<g.length;i++)n=(n*31+g.charCodeAt(i))%palette.length;
+  return palette[n];
+}
+function makerPinHtml(name){
+  var g=makerGroup(name)||'未設定';
+  var chars=Array.from(g.replace(/\s/g,''));
+  var label=chars.length?chars[0]:'未';
+  return '<div style="width:29px;height:29px;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:'+makerPinColor(g)+';box-shadow:0 2px 8px #0005;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:950"><span style="transform:rotate(45deg)">'+esc(label)+'</span></div>';
+}
 function renderMap(){
   ensureMap();if(!leafletMap)return;
   machineLayer.clearLayers();routeLayer.clearLayers();
-  var mode=allRoutes?'all':(mapTodayMode?'today':'weekday');
-  $id('mapTag').textContent=mode==='all'?'MAP · 全ルート':mode==='today'?'MAP · 本日':'MAP · '+selectedMapDay+'曜';
+  var mode=allRoutes?'all':(mapTomorrowMode?'tomorrow':(mapTodayMode?'today':'weekday'));
+  $id('mapTag').textContent=mode==='all'?'MAP · 全ルート':mode==='today'?'MAP · 本日':mode==='tomorrow'?'MAP · 明日の予定':'MAP · '+selectedMapDay+'曜';
 
   var t;
   if(mode==='all'){
     t=state.machines.slice();
+  }else if(mode==='tomorrow'){
+    var td=tomorrowDate(),tt=iso(td);
+    var plan=state.tomorrowPlan&&state.tomorrowPlan.date===tt?state.tomorrowPlan:null;
+    var ids=plan?plan.ids:state.machines.filter(eligibleTomorrow).map(function(m){return m.id});
+    t=state.machines.filter(function(m){return ids.indexOf(m.id)>=0});
   }else if(mode==='today'){
-    // 本日モードは「今日の曜日に設定された全自販機」を表示し、
-    // 頻度上の本日対象だけを通常ピン、未実施予定外をスラッシュで薄く表示する。
     t=state.machines.filter(function(m){
       return isDue(m,todayDay)||m.force===today||!!m.order;
     });
   }else{
-    // 曜日モードはその曜日に登録された全自販機を表示。
     t=state.machines.filter(function(m){return Array.isArray(m.days)&&m.days.indexOf(selectedMapDay)>=0});
   }
 
@@ -406,7 +421,14 @@ function renderMap(){
       var routeDay=(m.days&&m.days.length)?m.days[0]:todayDay;
       html=routePinHtml(routeDay);
       icon=L.divIcon({className:'vendrive-route-pin',html:html,iconSize:[29,29],iconAnchor:[14.5,14.5]});
-    }else if(mode==='today'){
+    }else if(mode==='weekday'){
+      html=makerPinHtml(m.maker);
+      icon=L.divIcon({className:'vendrive-maker-pin',html:html,iconSize:[29,29],iconAnchor:[14.5,14.5]});
+    }else if(mode==='tomorrow'){
+      var tomorrowCls=markerClass(m);
+      html=tomorrowCls==='task'?'<div class="taskPinDot">✓</div>':'<div class="pinDot '+tomorrowCls+'"></div>';
+      icon=L.divIcon({className:'vendrive-pin',html:html,iconSize:[25,25],iconAnchor:[12.5,12.5]});
+    }else{
       var due=isDue(m,todayDay);
       if(m.order){
         var orderCls=markerClass(m);
@@ -420,17 +442,12 @@ function renderMap(){
         html=cls==='task'?'<div class="taskPinDot">✓</div>':'<div class="pinDot '+cls+'"></div>';
       }
       icon=L.divIcon({className:'vendrive-pin',html:html,iconSize:[25,25],iconAnchor:[12.5,12.5]});
-    }else{
-      var cls2=markerClass(m);
-      html=cls2==='task'?'<div class="taskPinDot">✓</div>':'<div class="pinDot '+cls2+'"></div>';
-      icon=L.divIcon({className:'vendrive-pin',html:html,iconSize:[25,25],iconAnchor:[12.5,12.5]});
     }
     var mk=L.marker([m.lat,m.lng],{icon:icon,title:m.name});
     mk.on('click',function(){openMachine(m.id,m.order?'order':'normal')});
     mk.addTo(machineLayer);bounds.push([m.lat,m.lng]);
   });
 
-  // 営業所はどのMAPモードでも常時表示。
   (state.offices||[]).forEach(function(o){
     if(typeof o.lat!=='number'||typeof o.lng!=='number')return;
     var icon=L.divIcon({className:'vendrive-office-pin',html:officePinHtml(),iconSize:[31,31],iconAnchor:[15.5,15.5]});
@@ -445,6 +462,7 @@ function renderMap(){
   t.forEach(function(m){box.appendChild(card(m,'map'))});
   if(!t.length)box.innerHTML='<div class="card" style="padding:14px;margin-top:7px;color:#777;font-size:11px">このルートの表示対象はありません。</div>';
 }
+
 function renderMachines(list){
   var day=$id('machineDayFilter')?$id('machineDayFilter').value:'all', maker=$id('machineMakerFilter')?$id('machineMakerFilter').value:'all';
   list=list.filter(function(m){return day==='all'||(m.days||[]).indexOf(day)>=0}).filter(function(m){return maker==='all'||makerGroup(m.maker)===maker});
@@ -469,9 +487,16 @@ function saveMachineData(){if(!selectedMachine)return;var m=selectedMachine;m.na
 function finishVisitCore(){
 if(!selectedMachine)return;
 var hadOrder=!!selectedMachine.order;
-selectedMachine.visited=true;selectedMachine.last=today;selectedMachine.force=null;selectedMachine.skip=null;
-if(hadOrder){var o=selectedMachine.order;state.history.push({machineId:selectedMachine.id,machineName:selectedMachine.name,type:o.type,sub:o.sub||'',detail:o.detail||'',completedAt:Date.now()});selectedMachine.order=null}
-persist();closeModal('machineModal');closeModal('orderVisitConfirm');renderAll();toast(hadOrder?'訪問・オーダー対応完了':'訪問完了')
+if(hadOrder){
+  var o=selectedMachine.order;
+  state.history.push({machineId:selectedMachine.id,machineName:selectedMachine.name,type:o.type,sub:o.sub||'',detail:o.detail||'',completedAt:Date.now()});
+  selectedMachine.order=null;
+  selectedMachine.force=null;
+  selectedMachine.skip=null;
+}else{
+  selectedMachine.visited=true;selectedMachine.last=today;selectedMachine.force=null;selectedMachine.skip=null;
+}
+persist();closeModal('machineModal');closeModal('orderVisitConfirm');renderAll();toast(hadOrder?'オーダー対応完了':'訪問完了')
 }
 function completeVisit(){
 if(!selectedMachine)return;
@@ -480,7 +505,7 @@ finishVisitCore()
 }
 function skipVisit(){if(!selectedMachine)return;selectedMachine.skip=today;selectedMachine.visited=false;persist();closeModal('machineModal');renderAll();toast('本日の訪問をスキップ')}
 function forceVisit(){if(!selectedMachine)return;selectedMachine.force=today;selectedMachine.visited=false;persist();closeModal('machineModal');renderAll();toast('本日の臨時訪問に追加')}
-function completeOrder(id){var m=state.machines.find(function(x){return x.id===id});if(!m||!m.order)return;var o=m.order;state.history.push({machineId:m.id,machineName:m.name,type:o.type,sub:o.sub||'',detail:o.detail||'',completedAt:Date.now()});m.order=null;m.visited=true;m.last=today;persist();renderAll();toast('オーダー対応完了')}
+function completeOrder(id){var m=state.machines.find(function(x){return x.id===id});if(!m||!m.order)return;var o=m.order;state.history.push({machineId:m.id,machineName:m.name,type:o.type,sub:o.sub||'',detail:o.detail||'',completedAt:Date.now()});m.order=null;persist();renderAll();toast('オーダー対応完了')}
 function openOrder(){selectedOrderMachine=null;selectedOrderType=null;selectedProductSub=null;$id('orderMachineSearch').value='';$id('orderResults').classList.add('hidden');$id('selectedMachine').classList.add('hidden');$id('orderDetail').value='';document.querySelectorAll('.orderType,.subtype').forEach(function(e){e.classList.remove('active')});$id('productSub').classList.add('hidden');openModal('orderModal')}
 function orderSearch(){
   var q=$id('orderMachineSearch').value.trim().toLowerCase();var box=$id('orderResults');box.innerHTML='';var list=state.machines.filter(function(m){return !q||[m.name,m.address,m.code,m.id].join(' ').toLowerCase().indexOf(q)>=0}).slice(0,12);
@@ -593,15 +618,15 @@ function renderTodayWithTasks(){
 function initDays(){
   var b=$id('mapDays'),items=['本日','月','火','水','木','金','土','日'];
   b.innerHTML=items.map(function(x){
-    var active=x==='本日'?(mapTodayMode&&!allRoutes):(x===selectedMapDay&&!mapTodayMode&&!allRoutes);
+    var active=x==='本日'?(mapTodayMode&&!mapTomorrowMode&&!allRoutes):(x===selectedMapDay&&!mapTodayMode&&!mapTomorrowMode&&!allRoutes);
     var color=x==='本日'?'#111':dayRouteColor(x);
     return'<button class="day '+(active?'active':'')+'" data-day="'+x+'" style="--day-color:'+color+'">'+x+'</button>';
   }).join('');
   b.querySelectorAll('.day').forEach(function(e){
     e.style.color=e.classList.contains('active')?'#fff':e.style.getPropertyValue('--day-color');
     e.onclick=function(){
-      if(e.dataset.day==='本日'){mapTodayMode=true;allRoutes=false}
-      else{mapTodayMode=false;selectedMapDay=e.dataset.day;allRoutes=false}
+      if(e.dataset.day==='本日'){mapTodayMode=true;mapTomorrowMode=false;allRoutes=false}
+      else{mapTodayMode=false;mapTomorrowMode=false;selectedMapDay=e.dataset.day;allRoutes=false}
       $id('allRoutes').textContent='全ルート';initDays();renderMap()
     }
   })
@@ -628,7 +653,7 @@ $id('officeAddTop').onclick=function(){startOfficeAdd();};
   document.querySelectorAll('.tabs button').forEach(function(b){b.onclick=function(){document.querySelectorAll('.tabs button').forEach(function(x){x.classList.remove('active')});b.classList.add('active');document.querySelectorAll('.page').forEach(function(p){p.classList.add('hidden')});$id(b.dataset.page).classList.remove('hidden');if(b.dataset.page==='mapPage'){ensureMap();setTimeout(function(){if(leafletMap){leafletMap.invalidateSize();renderMap()}},50)}}})
   $id('allRoutes').onclick=function(){allRoutes=!allRoutes;mapTodayMode=false;$id('allRoutes').textContent=allRoutes?'曜日ルート':'全ルート';initDays();renderMap()}
   $id('finishDay').onclick=finishDay;$id('todayTodo').parentNode.onclick=function(){showTodayStat('todo')};$id('todayVisited').parentNode.onclick=function(){showTodayStat('done')};$id('todayOrders').parentNode.onclick=function(){showTodayStat('order')};$id('closeStats').onclick=function(){closeModal('statsModal')};$id('orderVisitDone').onclick=finishVisitCore;$id('orderVisitKeep').onclick=function(){if(selectedMachine){selectedMachine.visited=true;selectedMachine.last=today;selectedMachine.force=null;selectedMachine.skip=null;persist();closeModal('orderVisitConfirm');renderAll();toast('訪問完了')}}
-  $id('closeTomorrow').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowLater').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowSave').onclick=function(){persist();closeModal('tomorrowModal');toast('明日の予定を保存しました')}
+  $id('closeTomorrow').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowMap').onclick=function(){closeModal('tomorrowModal');mapTomorrowMode=true;mapTodayMode=false;allRoutes=false;$id('allRoutes').textContent='全ルート';showPage('mapPage');initDays();renderMap();toast('明日の予定だけをMAPに表示しています')};$id('tomorrowLater').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowSave').onclick=function(){persist();closeModal('tomorrowModal');toast('明日の予定を保存しました')}
   $id('closeMachine').onclick=function(){closeModal('machineModal')};$id('detailMore').onclick=function(){var e=$id('machineExtra');e.classList.toggle('hidden');this.textContent=e.classList.contains('hidden')?'詳細表示':'詳細を閉じる'};$id('saveMachine').onclick=saveMachineData;$id('completeMachine').onclick=completeVisit;$id('skipMachine').onclick=skipVisit;$id('forceMachine').onclick=forceVisit;$id('machineRoute').onclick=function(){if(selectedMachine)location.href='https://www.google.com/maps/dir/?api=1&destination='+(typeof selectedMachine.lat==='number'&&typeof selectedMachine.lng==='number'?selectedMachine.lat+','+selectedMachine.lng:encodeURIComponent(selectedMachine.address||selectedMachine.name))}
   $id('addOrder').onclick=openOrder;
   $id('addTask').onclick=function(){refreshMakerOptions();$id('taskText').value='';openModal('taskModal')};
