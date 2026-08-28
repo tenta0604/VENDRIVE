@@ -71,7 +71,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
 .taskPinDot{width:25px;height:25px;border:3px solid #fff;border-radius:50%;background:#0891b2;box-shadow:0 2px 8px #0005;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:950}
 #map,.leaflet-container{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 html,body{overscroll-behavior-y:none}body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}input,textarea,select{-webkit-user-select:text;user-select:text}
-</style><style>.days .day{border-color:var(--day-color);}.days .day.active{background:var(--day-color);border-color:var(--day-color);color:#fff!important}</style><style>.mapSlashPin{width:25px;height:25px;border:2px solid #d8d8d8;border-radius:50%;display:grid;place-items:center;color:#c9c9c9;font-size:18px;font-weight:900;opacity:.38;background:#f7f7f7}.todayDonePin{opacity:.38!important;filter:grayscale(1)}</style></head>
+</style><style>.days .day{border-color:var(--day-color);}.days .day.active{background:var(--day-color);border-color:var(--day-color);color:#fff!important}</style><style>.mapSlashPin{width:25px;height:25px;border:2px solid #d8d8d8;border-radius:50%;display:grid;place-items:center;color:#c9c9c9;font-size:18px;font-weight:900;opacity:.38;background:#f7f7f7}.todayDonePin{opacity:.38!important;filter:grayscale(1)}</style><style>.danger{background:#dc2626!important;color:#fff!important;border:0}</style></head>
 <body>
 <div class="app">
 <header class="header"><div class="brand"><div class="mark">V</div><div><div class="name">VENDRIVE</div><div class="date" id="headerDate"></div></div></div></header>
@@ -209,6 +209,11 @@ html,body{overscroll-behavior-y:none}body{-webkit-user-select:none;user-select:n
 <div class="formGroup"><label>自販機を検索</label><input id="tomorrowAddSearch" placeholder="自販機名・管理番号・メーカー・住所"></div>
 <div id="tomorrowAddList"></div>
 </div></div>
+<div class="modal" id="deleteMachineModal"><div class="sheet">
+<div class="modalTop"><div><div class="ey">DELETE MACHINE</div><div class="title">自販機を削除</div></div><button class="pill" id="closeDeleteMachine">閉じる</button></div>
+<div class="notice" id="deleteMachineText">この自販機を削除しますか？</div>
+<div class="actions"><button class="secondary" id="cancelDeleteMachine">キャンセル</button><button class="danger" id="confirmDeleteMachine">削除する</button></div>
+</div></div>
 <div class="modal" id="addMachineModal"><div class="sheet">
 <div class="modalTop"><div><div class="ey">NEW MACHINE</div><div class="title">自販機を追加</div></div><button class="pill" id="closeAdd">閉じる</button></div>
 <div class="notice">マップ上の位置を指定して登録できます。住所は自動取得後も手動修正できる設計です。</div>
@@ -310,9 +315,13 @@ function card(m,context){
   var cls='item '+(m.visited&&!order?'done ':'')+(order?'order ':'')+(order?'urgent':'');
   var detail=order?(order.type+(order.sub?' ＞ '+order.sub:'')+' ・ '+timeLeft(order.createdAt)):m.cycle+' ・ '+m.time;
   var e=document.createElement('div');e.className=cls;
-  var right=context==='machines'?'':('<span class="badge '+badge+'">'+status+'</span>');
+  var right=context==='machines'?('<button class="pill machineDeleteBtn" type="button" title="この自販機を削除">削除</button>'):('<span class="badge '+badge+'">'+status+'</span>');
   e.innerHTML='<div><b>'+esc(m.name)+'</b><div class="makerChip">'+esc(m.maker||'メーカー未設定')+'</div><div class="meta">'+esc(detail)+'</div></div>'+right;
-  e.onclick=function(){openMachine(m.id,order?'order':'normal')};return e;
+  e.onclick=function(){openMachine(m.id,order?'order':'normal')};
+  if(context==='machines'){
+    e.querySelector('.machineDeleteBtn').onclick=function(ev){ev.stopPropagation();confirmDeleteMachine(m.id)};
+  }
+  return e;
 }
 function timeLeft(ts){
   var left=86400000-(Date.now()-ts), h=Math.ceil(left/3600000);
@@ -486,6 +495,25 @@ function renderOrders(){
   var hbox=$id('historyList');hbox.innerHTML='';(state.history||[]).slice().sort(function(a,b){return b.completedAt-a.completedAt}).forEach(function(h){var e=document.createElement('div');e.className='history';e.innerHTML='<b>'+esc(h.machineName)+'</b><div class="meta">'+esc(h.type)+(h.sub?' ＞ '+esc(h.sub):'')+(h.detail?' ・ '+esc(h.detail):'')+'<br>'+new Date(h.completedAt).toLocaleString('ja-JP')+'</div>';hbox.appendChild(e)});if(!hbox.children.length)hbox.innerHTML='<div class="card" style="padding:14px;color:#777;font-size:11px">過去30日間の対応履歴はありません。</div>';
 }
 function renderAll(){renderHeader();renderTodayWithTasks();renderMachines(state.machines);renderOrders();renderTasks();renderMakers();refreshMakerOptions();renderOffices();if(!document.getElementById('mapPage').classList.contains('hidden'))renderMap()}
+var deleteMachineTargetId=null;
+function confirmDeleteMachine(id){
+  var m=state.machines.find(function(x){return x.id===id});if(!m)return;
+  deleteMachineTargetId=id;
+  $id('deleteMachineText').textContent='「'+m.name+'」を削除します。この操作は元に戻せません。';
+  openModal('deleteMachineModal');
+}
+function deleteMachine(){
+  if(!deleteMachineTargetId)return;
+  var id=deleteMachineTargetId;
+  state.machines=state.machines.filter(function(m){return m.id!==id});
+  if(state.tomorrowPlan&&Array.isArray(state.tomorrowPlan.ids)){
+    state.tomorrowPlan.ids=state.tomorrowPlan.ids.filter(function(x){return x!==id});
+  }
+  if(selectedMachine&&selectedMachine.id===id)selectedMachine=null;
+  if(selectedOrderMachine&&selectedOrderMachine.id===id)selectedOrderMachine=null;
+  deleteMachineTargetId=null;
+  persist();closeModal('deleteMachineModal');renderAll();toast('自販機を削除しました');
+}
 function openMachine(id,mode){
   var m=state.machines.find(function(x){return x.id===id});if(!m)return;selectedMachine=m;
   $id('machineModalTitle').textContent=m.name;$id('detailMaker').textContent=m.maker||'メーカー未設定';document.querySelectorAll('#mDaysPicker button').forEach(function(b){b.classList.toggle('active',(m.days||[]).indexOf(b.dataset.day)>=0)});var activeTasks=(state.tasks||[]).filter(function(t){return !t.completed&&(t.target==='all'||makerGroup(m.maker)===t.target)});if(activeTasks.length){$id('detailTaskText').textContent=activeTasks[0].text+(activeTasks.length>1?' ほか'+(activeTasks.length-1)+'件':'');$id('detailTaskMaker').textContent=activeTasks[0].target==='all'?'全メーカー':'対象：'+activeTasks[0].target;$id('detailTask').classList.remove('hidden')}else{$id('detailTask').classList.add('hidden')}applyMakerSelect('mMaker','mMakerCustom',m.maker||'');$id('detailLast').textContent=m.last||'未登録';var next=nextVisitDate(m);$id('detailNext').textContent=next?next+'（'+WEEK[new Date(next+'T00:00:00').getDay()]+'）':'未定';$id('detailSales').textContent=m.sales||'販売データ未登録';if(m.order){$id('detailOrderType').textContent=m.order.type+(m.order.sub?' ＞ '+m.order.sub:'');$id('detailOrderText').textContent=(m.order.detail||'詳細なし')+' ・ '+timeLeft(m.order.createdAt);$id('detailOrder').classList.remove('hidden')}else{$id('detailOrder').classList.add('hidden')};$id('mName').value=m.name;$id('mCode').value=m.code||'';$id('mAddress').value=m.address||'';$id('mCycle').value=m.cycle||'1週間に1回';$id('mLast').value=m.last||today;$id('mTime').value=m.time||'指定なし';$id('mSales').value=m.sales||'';$id('mMemo').value=m.memo||'';$id('machineExtra').classList.add('hidden');$id('detailMore').textContent='詳細表示';
@@ -730,7 +758,7 @@ $id('officeAddTop').onclick=function(){startOfficeAdd();};
   initDays();renderMap();
   toast('明日の予定だけをMAPに表示しています');
 };$id('tomorrowLater').onclick=function(){closeModal('tomorrowModal')};$id('tomorrowSave').onclick=function(){if(state.tomorrowPlan)state.tomorrowPlan.manual=true;persist();closeModal('tomorrowModal');toast('明日の予定を保存しました')}
-  $id('closeMachine').onclick=function(){closeModal('machineModal')};$id('detailMore').onclick=function(){var e=$id('machineExtra');e.classList.toggle('hidden');this.textContent=e.classList.contains('hidden')?'詳細表示':'詳細を閉じる'};$id('saveMachine').onclick=saveMachineData;$id('completeMachine').onclick=completeVisit;$id('skipMachine').onclick=skipVisit;$id('forceMachine').onclick=forceVisit;$id('machineRoute').onclick=function(){if(selectedMachine)location.href='https://www.google.com/maps/dir/?api=1&destination='+(typeof selectedMachine.lat==='number'&&typeof selectedMachine.lng==='number'?selectedMachine.lat+','+selectedMachine.lng:encodeURIComponent(selectedMachine.address||selectedMachine.name))}
+  $id('closeMachine').onclick=function(){closeModal('machineModal')};$id('closeDeleteMachine').onclick=function(){deleteMachineTargetId=null;closeModal('deleteMachineModal')};$id('cancelDeleteMachine').onclick=function(){deleteMachineTargetId=null;closeModal('deleteMachineModal')};$id('confirmDeleteMachine').onclick=deleteMachine;$id('detailMore').onclick=function(){var e=$id('machineExtra');e.classList.toggle('hidden');this.textContent=e.classList.contains('hidden')?'詳細表示':'詳細を閉じる'};$id('saveMachine').onclick=saveMachineData;$id('completeMachine').onclick=completeVisit;$id('skipMachine').onclick=skipVisit;$id('forceMachine').onclick=forceVisit;$id('machineRoute').onclick=function(){if(selectedMachine)location.href='https://www.google.com/maps/dir/?api=1&destination='+(typeof selectedMachine.lat==='number'&&typeof selectedMachine.lng==='number'?selectedMachine.lat+','+selectedMachine.lng:encodeURIComponent(selectedMachine.address||selectedMachine.name))}
   $id('addOrder').onclick=openOrder;
   $id('addTask').onclick=function(){refreshMakerOptions();$id('taskText').value='';openModal('taskModal')};
   $id('closeTask').onclick=function(){closeModal('taskModal')};$id('cancelTask').onclick=function(){closeModal('taskModal')};
